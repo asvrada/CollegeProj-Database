@@ -129,8 +129,15 @@ void test_parse_query() {
 
     struct_third_line third = query.third;
 
-//    EXPECT_EQ_INT(3, third.length);
-//    EXPECT_EQ_STRING(third.joins[0].lhs)
+    EXPECT_EQ_INT(3, (int)third.length);
+    EXPECT_RELATION_COLUMN(&third.joins[0].lhs, "A", "c2");
+    EXPECT_RELATION_COLUMN(&third.joins[0].rhs, "C", "c0");
+
+    EXPECT_RELATION_COLUMN(&third.joins[1].lhs, "A", "c3");
+    EXPECT_RELATION_COLUMN(&third.joins[1].rhs, "D", "c0");
+
+    EXPECT_RELATION_COLUMN(&third.joins[2].lhs, "C", "c2");
+    EXPECT_RELATION_COLUMN(&third.joins[2].rhs, "D", "c2");
 
     // free
     free_struct_query(&query);
