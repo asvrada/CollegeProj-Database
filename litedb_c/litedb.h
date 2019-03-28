@@ -17,6 +17,8 @@
 #define EXPECT_ALPHABET(c) do { \
 assert(('a' <= c->input[0] && c->input[0] <= 'z') || ('A' <= c->input[0] && c->input[0] <= 'Z')); } while(0)
 
+#define IS_ALPHABET_OR_NUMERIC(ch) ((ch) >= '0' && (ch) <= '9' || (ch) >= 'a' && (ch) <= 'z' || (ch) >= 'A' && (ch) <= 'Z')
+
 //////////
 // enum //
 //////////
@@ -177,11 +179,26 @@ static void free_struct_first_line(struct_first_line *fl) {
 }
 
 static void free_struct_second_line(struct_second_line *sl) {
+    assert(sl->length != 0);
 
+    free(sl->relations);
+    sl->length = 0;
+}
+
+static void free_struct_join(struct_join *join) {
+    free_struct_relation_column(&join->lhs);
+    free_struct_relation_column(&join->rhs);
 }
 
 static void free_struct_third_line(struct_third_line *tl) {
+    assert(tl->length != 0);
 
+    for (int i = 0; i < tl->length; i++) {
+        free_struct_join(&tl->joins[i]);
+    }
+
+    free(tl->joins);
+    tl->length = 0;
 }
 
 static void free_struct_fourth_line(struct_fourth_line *fl) {
@@ -274,7 +291,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
         char ch = tmp_p[0];
 
         // end of column
-        if (ch == ')') {
+        if (!IS_ALPHABET_OR_NUMERIC(ch)) {
             size_t len = c->top - head;
             const char *str = context_pop(c, len);
             // copy str
@@ -311,7 +328,6 @@ int parse_first_line_sum(struct_parse_context *c, struct_relation_column *relati
 /*
 Sums -> Sum | Sum,WhitespaceSums
  */
-// todo
 int parse_first_line_sums(struct_parse_context *c, struct_first_line *v) {
     // Should start with SUM
     EXPECT(c, 'S');
@@ -362,15 +378,157 @@ int parse_first_line(struct_parse_context *c, struct_first_line *v) {
     return parse_first_line_sums(c, v);
 }
 
+// FROMWhitespaceRelations
+void parse_second_line_from(struct_parse_context *c) {
+    assert(0 == strncmp(c->input, "FROM", strlen("FROM")));
+    c->input += strlen("FROM");
+}
+
+int parse_second_line_relation(struct_parse_context *c, char *ch) {
+    EXPECT_ALPHABET(c);
+
+    *ch = c->input[0];
+    c->input++;
+
+    return PARSE_OK;
+}
+
+// Relation | Relation,WhitespaceRelations
+int parse_second_line_relations(struct_parse_context *c, struct_second_line *v) {
+    EXPECT_ALPHABET(c);
+
+    size_t head = c->top;
+
+    char ch = 0;
+    parse_second_line_relation(c, &ch);
+    // push into stack
+    *(char *) context_push(c, sizeof(char)) = ch;
+
+    while (c->input[0] == ',') {
+        c->input++;
+        parse_whitespace(c);
+
+        parse_second_line_relation(c, &ch);
+        *(char *) context_push(c, sizeof(char)) = ch;
+    }
+
+    size_t len = c->top - head;
+    const char *relations = context_pop(c, len);
+
+    v->relations = (char *) malloc(len);
+    memcpy(v->relations, relations, len);
+    v->length = len / sizeof(char);
+
+    return PARSE_OK;
+}
+
+int parse_second_line(struct_parse_context *c, struct_second_line *v) {
+    // FROM
+    EXPECT(c, 'F');
+
+    parse_second_line_from(c);
+    parse_whitespace(c);
+
+    return parse_second_line_relations(c, v);
+}
+
+void parse_third_line_where(struct_parse_context *c) {
+    assert(0 == strncmp(c->input, "WHERE", strlen("WHERE")));
+    c->input += strlen("WHERE");
+}
+
+// Relation.ColumnWhitespace=WhitespaceRelation.Column
+int parse_third_line_join(struct_parse_context *c, struct_join *join) {
+    EXPECT_ALPHABET(c);
+
+    parse_relation_column(c, &join->lhs);
+
+    parse_whitespace(c);
+    EXPECT(c, '=');
+    c->input++;
+    parse_whitespace(c);
+
+    parse_relation_column(c, &join->rhs);
+
+    return PARSE_OK;
+}
+
+void parse_and(struct_parse_context *c) {
+    assert(0 == strncmp(c->input, "AND", strlen("AND")));
+    c->input += strlen("AND");
+}
+
+// Join | JoinWhitespaceANDWhitespaceJoins
+int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
+    EXPECT_ALPHABET(c);
+
+    struct_join *join = NULL;
+
+    size_t head = c->top;
+
+    // left hand side
+    join = malloc(sizeof(struct_join));
+    parse_third_line_join(c, join);
+
+    // push into context
+    *(struct_join *) context_push(c, sizeof(struct_join)) = *join;
+    free(join);
+
+    while (c->input[0] == ' ') {
+        // skip AND
+        parse_whitespace(c);
+        parse_and(c);
+        parse_whitespace(c);
+
+        join = malloc(sizeof(struct_join));
+        parse_third_line_join(c, join);
+
+        // push into context
+        *(struct_join *) context_push(c, sizeof(struct_join)) = *join;
+        free(join);
+    }
+
+    size_t len = c->top - head;
+    const struct_join *joins = context_pop(c, len);
+
+    tl->joins = malloc(len);
+    memcpy(tl->joins, joins, len);
+    tl->length = len / sizeof(struct_join);
+
+    return PARSE_OK;
+}
+
+// WHEREWhitespaceJoins
+int parse_third_line(struct_parse_context *c, struct_third_line *v) {
+    // WHERE
+    EXPECT(c, 'W');
+
+    parse_third_line_where(c);
+    parse_whitespace(c);
+
+    return parse_third_line_joins(c, v);
+}
+
+// todo
+int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
+    // AND
+    EXPECT(c, 'A');
+
+
+
+    return PARSE_OK;
+}
+
+
 int parse_query(struct_parse_context *c, struct_query *v) {
     assert(c != NULL && v != NULL);
 
     parse_first_line(c, &v->first);
     parse_newline(c);
-//    parse_second_line();
-//    parse_newline(c);
-//    parse_third_line();
-//    parse_newline(c);
+    parse_second_line(c, &v->second);
+    parse_newline(c);
+    parse_third_line(c, &v->third);
+    parse_newline(c);
 //    parse_fourth_line();
 
     return PARSE_OK;

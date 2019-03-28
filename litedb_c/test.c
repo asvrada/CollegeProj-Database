@@ -129,7 +129,7 @@ void test_parse_query() {
 
     struct_third_line third = query.third;
 
-    EXPECT_EQ_INT(3, (int)third.length);
+    EXPECT_EQ_INT(3, (int) third.length);
     EXPECT_RELATION_COLUMN(&third.joins[0].lhs, "A", "c2");
     EXPECT_RELATION_COLUMN(&third.joins[0].rhs, "C", "c0");
 
@@ -143,15 +143,131 @@ void test_parse_query() {
     free_struct_query(&query);
 }
 
+void test_parse_second_line_relation() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "A\n");
+
+    char ch = 0;
+    parse_second_line_relation(&c, &ch);
+
+    EXPECT_EQ_CHAR('A', ch);
+
+    free_struct_parse_context(&c);
+}
+
+void test_parse_second_line_relations() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "A, B, C, D\n");
+
+    struct_second_line sl;
+
+    parse_second_line_relations(&c, &sl);
+
+    EXPECT_EQ_INT(4, (int) sl.length);
+    EXPECT_EQ_CHAR('A', sl.relations[0]);
+    EXPECT_EQ_CHAR('B', sl.relations[1]);
+    EXPECT_EQ_CHAR('C', sl.relations[2]);
+    EXPECT_EQ_CHAR('D', sl.relations[3]);
+
+    free_struct_parse_context(&c);
+    free_struct_second_line(&sl);
+}
+
+void test_parse_secondline() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "FROM A, B, C, E\n");
+
+    struct_second_line sl;
+
+    parse_second_line(&c, &sl);
+
+    EXPECT_EQ_INT(4, (int) sl.length);
+    EXPECT_EQ_CHAR('A', sl.relations[0]);
+    EXPECT_EQ_CHAR('B', sl.relations[1]);
+    EXPECT_EQ_CHAR('C', sl.relations[2]);
+    EXPECT_EQ_CHAR('E', sl.relations[3]);
+
+    free_struct_parse_context(&c);
+    free_struct_second_line(&sl);
+}
+
+void test_parse_third_line_join() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "A.c2 = C.c0\n");
+
+    struct_join join;
+    parse_third_line_join(&c, &join);
+
+    EXPECT_RELATION_COLUMN(&join.lhs, "A", "c2");
+    EXPECT_RELATION_COLUMN(&join.rhs, "C", "c0");
+
+    free_struct_parse_context(&c);
+    free_struct_join(&join);
+}
+
+void test_parse_third_line_joins() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "A.c2 = C.c0 AND A.c1 = B.c0 AND C.c1 = E.c0\n");
+
+    struct_third_line tl;
+    parse_third_line_joins(&c, &tl);
+
+    EXPECT_EQ_INT(3, (int)tl.length);
+
+    EXPECT_RELATION_COLUMN(&tl.joins[0].lhs, "A", "c2");
+    EXPECT_RELATION_COLUMN(&tl.joins[0].rhs, "C", "c0");
+
+    EXPECT_RELATION_COLUMN(&tl.joins[1].lhs, "A", "c1");
+    EXPECT_RELATION_COLUMN(&tl.joins[1].rhs, "B", "c0");
+
+    EXPECT_RELATION_COLUMN(&tl.joins[2].lhs, "C", "c1");
+    EXPECT_RELATION_COLUMN(&tl.joins[2].rhs, "E", "c0");
+
+    free_struct_parse_context(&c);
+    free_struct_third_line(&tl);
+}
+
+void test_parse_third_line() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "WHERE A.c2 = C.c0 AND A.c1 = B.c0 AND C.c1 = E.c0\n");
+
+    struct_third_line tl;
+    parse_third_line(&c, &tl);
+
+    EXPECT_EQ_INT(3, (int)tl.length);
+
+    EXPECT_RELATION_COLUMN(&tl.joins[0].lhs, "A", "c2");
+    EXPECT_RELATION_COLUMN(&tl.joins[0].rhs, "C", "c0");
+
+    EXPECT_RELATION_COLUMN(&tl.joins[1].lhs, "A", "c1");
+    EXPECT_RELATION_COLUMN(&tl.joins[1].rhs, "B", "c0");
+
+    EXPECT_RELATION_COLUMN(&tl.joins[2].lhs, "C", "c1");
+    EXPECT_RELATION_COLUMN(&tl.joins[2].rhs, "E", "c0");
+
+    free_struct_parse_context(&c);
+    free_struct_third_line(&tl);
+}
+
 static void test_parse() {
-//    test_parse_paths();
-//    test_parse_queries();
-//    test_parse_query();
+    // first line
     test_parse_relation_column();
     test_parse_sum();
     test_parse_sums();
     test_parse_firstline();
-    test_parse_query();
+
+    // second line
+    test_parse_second_line_relation();
+    test_parse_second_line_relations();
+    test_parse_secondline();
+
+    // third line
+    test_parse_third_line_join();
+    test_parse_third_line_joins();
+    test_parse_third_line();
+
+    // total
+//    test_parse_query();
 }
 
 int main() {
