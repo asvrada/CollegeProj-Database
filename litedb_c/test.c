@@ -316,7 +316,7 @@ static void test_parse_fourth_line() {
 }
 
 static void test_parse_queries() {
-    const char path[] = "/Users/zijie/IDE_Projects/DATABASE/data/xxxs/queries.sql";
+    const char path[] = "./queries.txt";
 
     // load content from file
     char *input;
@@ -341,10 +341,15 @@ static void test_parse_queries() {
 
     parse_queries(&c, &queries);
 
-    EXPECT_EQ_INT(30, (int)queries.length);
+    EXPECT_EQ_INT(30, (int) queries.length);
+
+    // check some results by hand
+    EXPECT_EQ_STRING("ABCDE", queries.queries[29].second.relations, strlen("ABCDE"));
+    EXPECT_EQ_INT(-4157, queries.queries[27].fourth.predicates[0].rhs);
 
     free_struct_parse_context(&c);
     free_struct_queries(&queries);
+    free(input);
 }
 
 static void test_parse() {

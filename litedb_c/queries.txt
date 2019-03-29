@@ -1,0 +1,150 @@
+SELECT SUM(D.c0), SUM(D.c4), SUM(C.c1)
+FROM A, B, C, D
+WHERE A.c1 = B.c0 AND A.c3 = D.c0 AND C.c2 = D.c2
+AND D.c3 = -9496;
+
+SELECT SUM(A.c1)
+FROM A, C, D
+WHERE A.c2 = C.c0 AND A.c3 = D.c0 AND C.c2 = D.c2
+AND C.c2 = 2247;
+
+SELECT SUM(A.c6), SUM(A.c2)
+FROM A, B, C, D
+WHERE A.c2 = C.c0 AND A.c1 = B.c0 AND C.c2 = D.c2
+AND A.c4 = -9868;
+
+SELECT SUM(B.c1), SUM(B.c4)
+FROM A, B, C, E
+WHERE A.c2 = C.c0 AND A.c1 = B.c0 AND C.c1 = E.c0
+AND A.c3 = 4141;
+
+SELECT SUM(A.c1), SUM(C.c0), SUM(C.c3), SUM(C.c4)
+FROM A, C, D
+WHERE A.c2 = C.c0 AND A.c3 = D.c0 AND C.c2 = D.c2
+AND C.c1 < -4;
+
+SELECT SUM(B.c4), SUM(D.c1), SUM(A.c5), SUM(C.c1)
+FROM A, B, C, D
+WHERE A.c2 = C.c0 AND C.c2 = D.c2 AND A.c1 = B.c0
+AND C.c4 < -1610;
+
+SELECT SUM(D.c0), SUM(B.c1)
+FROM A, B, C, D
+WHERE A.c3 = D.c0 AND A.c1 = B.c0 AND A.c2 = C.c0
+AND A.c8 < -8489;
+
+SELECT SUM(A.c6), SUM(E.c4), SUM(C.c3), SUM(E.c3)
+FROM A, C, D, E
+WHERE C.c2 = D.c2 AND A.c2 = C.c0 AND C.c1 = E.c0
+AND D.c0 = 501;
+
+SELECT SUM(A.c3), SUM(C.c3)
+FROM A, B, C, D
+WHERE A.c1 = B.c0 AND A.c2 = C.c0 AND A.c3 = D.c0
+AND A.c6 > -3222;
+
+SELECT SUM(A.c8), SUM(E.c1), SUM(B.c1)
+FROM A, B, C, E
+WHERE C.c1 = E.c0 AND A.c2 = C.c0 AND A.c1 = B.c0
+AND C.c2 > 3797;
+
+SELECT SUM(D.c0), SUM(E.c2), SUM(D.c2), SUM(A.c8)
+FROM A, B, C, D, E
+WHERE C.c1 = E.c0 AND C.c2 = D.c2 AND A.c3 = D.c0 AND A.c1 = B.c0
+AND D.c4 > 2332;
+
+SELECT SUM(D.c4), SUM(C.c4)
+FROM A, C, D, E
+WHERE A.c3 = D.c0 AND C.c2 = D.c2 AND A.c2 = C.c0 AND C.c1 = E.c0
+AND E.c2 = -2448;
+
+SELECT SUM(B.c3), SUM(D.c4)
+FROM A, B, C, D, E
+WHERE A.c3 = D.c0 AND A.c2 = C.c0 AND C.c1 = E.c0 AND A.c1 = B.c0
+AND A.c3 = 4141;
+
+SELECT SUM(C.c0), SUM(B.c1)
+FROM A, B, C, D, E
+WHERE A.c1 = B.c0 AND A.c3 = D.c0 AND A.c2 = C.c0 AND C.c1 = E.c0
+AND C.c0 < 7601;
+
+SELECT SUM(B.c3), SUM(E.c4), SUM(C.c4)
+FROM A, B, C, D, E
+WHERE C.c2 = D.c2 AND A.c3 = D.c0 AND A.c1 = B.c0 AND C.c1 = E.c0
+AND A.c5 < -643;
+
+SELECT SUM(B.c2), SUM(D.c2), SUM(C.c3), SUM(A.c3)
+FROM A, B, C, D
+WHERE A.c1 = B.c0 AND A.c2 = C.c0 AND A.c3 = D.c0 AND C.c2 = D.c2
+AND C.c4 < 485;
+
+SELECT SUM(A.c0), SUM(B.c4)
+FROM A, B, C, D, E
+WHERE A.c1 = B.c0 AND A.c2 = C.c0 AND C.c1 = E.c0 AND A.c3 = D.c0
+AND A.c7 < 6625;
+
+SELECT SUM(B.c3), SUM(C.c3), SUM(D.c3), SUM(C.c1)
+FROM A, B, C, D, E
+WHERE A.c1 = B.c0 AND A.c2 = C.c0 AND C.c1 = E.c0 AND A.c3 = D.c0
+AND E.c1 < -2308;
+
+SELECT SUM(E.c2), SUM(D.c3), SUM(B.c4)
+FROM A, B, C, D, E
+WHERE A.c2 = C.c0 AND A.c1 = B.c0 AND C.c2 = D.c2 AND C.c1 = E.c0
+AND C.c1 < 2;
+
+SELECT SUM(B.c1)
+FROM A, B, C, D, E
+WHERE C.c2 = D.c2 AND C.c1 = E.c0 AND A.c3 = D.c0 AND A.c1 = B.c0
+AND A.c8 = -9922;
+
+SELECT SUM(E.c4), SUM(D.c3), SUM(E.c3), SUM(C.c2)
+FROM A, C, D, E
+WHERE A.c2 = C.c0 AND C.c1 = E.c0 AND A.c3 = D.c0 AND C.c2 = D.c2
+AND C.c1 < 2;
+
+SELECT SUM(A.c1), SUM(A.c6), SUM(B.c2)
+FROM A, B, C, D
+WHERE A.c1 = B.c0 AND A.c2 = C.c0 AND C.c2 = D.c2 AND A.c3 = D.c0
+AND D.c3 > 652;
+
+SELECT SUM(D.c4), SUM(D.c2), SUM(C.c3), SUM(E.c0)
+FROM A, C, D, E
+WHERE A.c3 = D.c0 AND C.c2 = D.c2 AND A.c2 = C.c0 AND C.c1 = E.c0
+AND D.c1 < 5136;
+
+SELECT SUM(C.c1), SUM(C.c2)
+FROM A, B, C, D, E
+WHERE C.c2 = D.c2 AND A.c2 = C.c0 AND A.c1 = B.c0 AND C.c1 = E.c0
+AND E.c1 < 2469;
+
+SELECT SUM(A.c6), SUM(B.c0), SUM(C.c4)
+FROM A, B, C, D
+WHERE A.c1 = B.c0 AND A.c3 = D.c0 AND A.c2 = C.c0 AND C.c2 = D.c2
+AND A.c1 > 5516;
+
+SELECT SUM(A.c9), SUM(D.c4), SUM(D.c3)
+FROM A, C, D, E
+WHERE A.c2 = C.c0 AND A.c3 = D.c0 AND C.c1 = E.c0 AND C.c2 = D.c2
+AND C.c2 < 8436;
+
+SELECT SUM(B.c3), SUM(A.c5)
+FROM A, B, C, D, E
+WHERE A.c1 = B.c0 AND A.c3 = D.c0 AND C.c2 = D.c2 AND C.c1 = E.c0
+AND E.c2 > -2448;
+
+SELECT SUM(C.c2), SUM(A.c8), SUM(A.c4)
+FROM A, B, C, D
+WHERE A.c3 = D.c0 AND A.c1 = B.c0 AND A.c2 = C.c0 AND C.c2 = D.c2
+AND A.c4 < -4157;
+
+SELECT SUM(B.c2), SUM(B.c1), SUM(C.c1), SUM(C.c2)
+FROM A, B, C, D, E
+WHERE A.c3 = D.c0 AND A.c1 = B.c0 AND C.c2 = D.c2 AND C.c1 = E.c0
+AND A.c0 < 7789;
+
+SELECT SUM(D.c1), SUM(C.c3), SUM(C.c2)
+FROM A, B, C, D, E
+WHERE A.c2 = C.c0 AND C.c2 = D.c2 AND C.c1 = E.c0 AND A.c1 = B.c0
+AND B.c2 = -8622;
+
