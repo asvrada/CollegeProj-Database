@@ -32,10 +32,10 @@ do { \
 } while (0)
 
 static void test_parse_first_line() {
-    struct_first_line first_line;
-
     struct_parse_context c;
     init_struct_parse_context(&c, "SELECT SUM(D.c0), SUM(D.c4), SUM(C.c1)\n");
+
+    struct_first_line first_line;
 
     int ret = parse_first_line(&c, &first_line);
     // should return 0
@@ -56,51 +56,49 @@ void test_parse_relation_column() {
     struct_parse_context c;
     init_struct_parse_context(&c, "D.c0)");
 
-    struct_relation_column *rc = (struct_relation_column *) malloc(sizeof(struct_relation_column));
+    struct_relation_column rc;
 
-    parse_relation_column(&c, rc);
+    parse_relation_column(&c, &rc);
 
-    EXPECT_RELATION_COLUMN(rc, "D", "c0");
+    EXPECT_RELATION_COLUMN(&rc, "D", "c0");
 
-    free_struct_relation_column(rc);
+    free_struct_relation_column(&rc);
     free_struct_parse_context(&c);
-    free(rc);
 }
 
 void test_parse_sum() {
     struct_parse_context c;
     init_struct_parse_context(&c, "SUM(D.c0)\n");
 
-    struct_relation_column *rc = (struct_relation_column *) malloc(sizeof(struct_relation_column));
+    struct_relation_column rc;
 
     // run
-    parse_first_line_sum(&c, rc);
+    parse_first_line_sum(&c, &rc);
 
-    EXPECT_RELATION_COLUMN(rc, "D", "c0");
+    EXPECT_RELATION_COLUMN(&rc, "D", "c0");
 
-    free_struct_relation_column(rc);
+    free_struct_relation_column(&rc);
     free_struct_parse_context(&c);
-    free(rc);
 }
 
 void test_parse_sums() {
     struct_parse_context c;
     init_struct_parse_context(&c, "SUM(A.c1), SUM(C.c0), SUM(C.c3), SUM(C.c4)\n");
 
-    struct_first_line firstline;
+    struct_first_line first;
 
     // run
-    parse_first_line_sums(&c, &firstline);
+    parse_first_line_sums(&c, &first);
 
-    EXPECT_EQ_INT(4, (int) firstline.length);
+    EXPECT_EQ_INT(4, (int) first.length);
 
-    EXPECT_RELATION_COLUMN(&firstline.sums[0], "A", "c1");
-    EXPECT_RELATION_COLUMN(&firstline.sums[1], "C", "c0");
-    EXPECT_RELATION_COLUMN(&firstline.sums[2], "C", "c3");
-    EXPECT_RELATION_COLUMN(&firstline.sums[3], "C", "c4");
+    EXPECT_RELATION_COLUMN(&first.sums[0], "A", "c1");
+    EXPECT_RELATION_COLUMN(&first.sums[1], "C", "c0");
+    EXPECT_RELATION_COLUMN(&first.sums[2], "C", "c3");
+    EXPECT_RELATION_COLUMN(&first.sums[3], "C", "c4");
 
     free_struct_parse_context(&c);
-    free_struct_first_line(&firstline);
+    free_struct_first_line(&first);
 }
 
 void test_parse_query() {
