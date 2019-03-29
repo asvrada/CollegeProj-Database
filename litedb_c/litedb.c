@@ -65,6 +65,7 @@ typedef struct {
 // FROM A, B, C, D
 typedef struct {
     char *relations;
+    // length of string, not including \0
     size_t length;
 } struct_second_line;
 
@@ -497,8 +498,14 @@ int parse_second_line_relations(struct_parse_context *c, struct_second_line *v) 
     size_t len = c->top - head;
     const char *relations = context_pop(c, len);
 
-    v->relations = (char *) malloc(len);
+    // len = number of alphabets
+    v->relations = (char *) malloc(len + 1);
     memcpy(v->relations, relations, len);
+
+    // add ending \0 to the string
+    v->relations[len] = 0;
+
+    // size of actual elements
     v->length = len / sizeof(char);
 
     return PARSE_OK;
@@ -837,6 +844,31 @@ int parse_second_part(struct_queries *queries, const char *input) {
 
     free_struct_parse_context(&c);
     return PARSE_OK;
+}
+
+void read_second_part_from_stdin(char **input) {
+    assert(input != NULL);
+
+    struct_parse_context c;
+
+    // we only need the stack, so no input given
+    init_struct_parse_context(&c, NULL);
+
+    char *line = NULL;
+    // no idea what is this for
+    size_t size = 0;
+
+    while (getline(&line, &size, stdin) != -1) {
+        strncpy((char *) context_push(&c, strlen(line)), line, strlen(line));
+    }
+
+    size_t len = c.top;
+    const char *tmp_input = context_pop(&c, len);
+
+    *input = malloc(len);
+    memcpy(*input, tmp_input, len);
+
+    free_struct_parse_context(&c);
 }
 
 #endif //LITE_DB_LITEDB_C

@@ -352,6 +352,54 @@ static void test_parse_queries() {
     free(input);
 }
 
+void test_parse_second_part() {
+    const char path[] = "./second_part.txt";
+
+    // load content from file
+    char *input;
+    FILE *f = fopen(path, "r");
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
+
+    input = malloc(fsize + 1);
+    fread(input, fsize, 1, f);
+    fclose(f);
+    input[fsize] = 0;
+
+    assert(strlen(input) == fsize);
+
+    // load queries from input
+    struct_queries queries;
+
+    parse_second_part(&queries, input);
+
+    EXPECT_EQ_INT(3, (int) queries.length);
+
+    // check some results by hand
+    EXPECT_EQ_STRING("ABCD", queries.queries[0].second.relations, strlen("ABCD"));
+    EXPECT_EQ_INT(7789, queries.queries[1].fourth.predicates[0].rhs);
+
+    free_struct_queries(&queries);
+    free(input);
+}
+
+void test_parse_second_part_from_stdin() {
+    char *input = NULL;
+    read_second_part_from_stdin(&input);
+
+    struct_queries queries;
+
+    parse_second_part(&queries, input);
+
+    EXPECT_EQ_INT(3, (int) queries.length);
+
+    // check some results by hand
+    free_struct_queries(&queries);
+    free(input);
+    input = NULL;
+}
+
 static void test_parse() {
     // first line
     test_parse_relation_column();
@@ -377,8 +425,9 @@ static void test_parse() {
 
     // total
     test_parse_query();
-
     test_parse_queries();
+    test_parse_second_part();
+    test_parse_second_part_from_stdin();
 }
 
 int main() {
