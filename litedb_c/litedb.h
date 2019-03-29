@@ -441,6 +441,7 @@ void parse_second_line_from(struct_parse_context *c) {
 int parse_second_line_relation(struct_parse_context *c, char *ch) {
     EXPECT_ALPHABET(c);
 
+    // match single alphabet
     *ch = c->input[0];
     c->input++;
 
@@ -458,6 +459,8 @@ int parse_second_line_relations(struct_parse_context *c, struct_second_line *v) 
     size_t head = c->top;
 
     char ch = 0;
+
+    // parse first relation
     parse_second_line_relation(c, &ch);
     // push into stack
     *(char *) context_push(c, sizeof(char)) = ch;
@@ -466,6 +469,7 @@ int parse_second_line_relations(struct_parse_context *c, struct_second_line *v) 
         c->input++;
         parse_whitespace(c);
 
+        // parse following relation
         parse_second_line_relation(c, &ch);
         *(char *) context_push(c, sizeof(char)) = ch;
     }
@@ -555,7 +559,7 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
     free(join);
 
     while (c->input[0] == ' ') {
-        // skip AND
+        // skip ws AND ws
         parse_whitespace(c);
         parse_and(c);
         parse_whitespace(c);
@@ -641,6 +645,7 @@ int parse_fourth_line_predicate(struct_parse_context *c, struct_predicate *p) {
 
     parse_relation_column(c, &p->lhs);
 
+    // skip ws Op ws
     parse_whitespace(c);
     parse_operator(c, &p->operator);
     parse_whitespace(c);
