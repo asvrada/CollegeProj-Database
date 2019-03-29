@@ -47,6 +47,9 @@ static void test_parse_first_line() {
     EXPECT_RELATION_COLUMN(&first_line.sums[0], "D", "c0");
     EXPECT_RELATION_COLUMN(&first_line.sums[1], "D", "c4");
     EXPECT_RELATION_COLUMN(&first_line.sums[2], "C", "c1");
+
+    free_struct_parse_context(&c);
+    free_struct_first_line(&first_line);
 }
 
 void test_parse_relation_column() {
@@ -317,6 +320,7 @@ void test_parse_fourth_line() {
 static void test_parse() {
     // first line
     test_parse_relation_column();
+
     test_parse_sum();
     test_parse_sums();
     test_parse_first_line();

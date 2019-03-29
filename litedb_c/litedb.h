@@ -304,6 +304,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
         if (ch == '.') {
             size_t len = c->top - head;
             const char *str = context_pop(c, len);
+
             // copy this str to struct
             relation_column->val[0] = (char *) malloc(len + 1);
             memcpy(relation_column->val[0], str, len);
