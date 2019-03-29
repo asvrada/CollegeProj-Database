@@ -2,8 +2,8 @@
 // Created by ZiJie Wu on 2019-03-28.
 //
 
-#ifndef LITE_DB_TEST_LITEDB_H
-#define LITE_DB_TEST_LITEDB_H
+#ifndef LITE_DB_LITEDB_H
+#define LITE_DB_LITEDB_H
 
 #include <stdlib.h>
 #include <assert.h>
@@ -24,6 +24,7 @@ assert(('a' <= c->input[0] && c->input[0] <= 'z') || ('A' <= c->input[0] && c->i
 //////////
 
 // this is the type of operations involved in the query predicates
+// =, <, >
 typedef enum {
     EQUAL,
     LESS_THAN,
@@ -113,12 +114,20 @@ typedef struct {
     size_t size, top;
 } struct_parse_context;
 
+/*
+ * pop the stack by moving the top index of the stack down
+ * must memcpy the memory because they may be occupied by future stack push
+ */
 static void *context_pop(struct_parse_context *c, size_t size) {
     assert(c->top >= size);
     c->top -= size;
     return c->stack + c->top;
 }
 
+/*
+ * push the stack by moving the top index of the stack up
+ * return a pointer to the allocated memory where the pushed object should store
+ */
 static void *context_push(struct_parse_context *c, size_t size) {
     void *ret;
     assert(size > 0);
@@ -142,22 +151,9 @@ static void *context_push(struct_parse_context *c, size_t size) {
     return ret;
 }
 
-/////////////////
-// Init & Free //
-/////////////////
-
-static void init_struct_parse_context(struct_parse_context *c, const char *input) {
-    c->input = input;
-    c->stack = NULL;
-    c->size = c->top = 0;
-}
-
-static void free_struct_parse_context(struct_parse_context *c) {
-    assert(c->top == 0);
-
-    free(c->stack);
-    c->top = c->size = 0;
-}
+////////////////////////////
+// Init & Free of structs //
+////////////////////////////
 
 static void free_struct_relation_column(struct_relation_column *rc) {
     assert(rc->val != NULL);
@@ -201,8 +197,19 @@ static void free_struct_third_line(struct_third_line *tl) {
     tl->length = 0;
 }
 
-static void free_struct_fourth_line(struct_fourth_line *fl) {
+static void free_struct_predicate(struct_predicate *p) {
+    free_struct_relation_column(&p->lhs);
+}
 
+static void free_struct_fourth_line(struct_fourth_line *fl) {
+    assert(fl->length != 0);
+
+    for (int i = 0; i < fl->length; i++) {
+        free_struct_predicate(&fl->predicates[0]);
+    }
+
+    free(fl->predicates);
+    fl->length = 0;
 }
 
 static void free_struct_query(struct_query *query) {
@@ -211,6 +218,20 @@ static void free_struct_query(struct_query *query) {
     free_struct_third_line(&query->third);
     free_struct_fourth_line(&query->fourth);
 }
+
+static void init_struct_parse_context(struct_parse_context *c, const char *input) {
+    c->input = input;
+    c->stack = NULL;
+    c->size = c->top = 0;
+}
+
+static void free_struct_parse_context(struct_parse_context *c) {
+    assert(c->top == 0);
+
+    free(c->stack);
+    c->top = c->size = 0;
+}
+
 
 ///////////
 // parse //
@@ -244,11 +265,20 @@ void parse_newline(struct_parse_context *c) {
     }
 }
 
+/*
+ * Literal SELECT
+ * Match string SELECT
+ */
 void parse_first_line_select(struct_parse_context *c) {
     assert(0 == strncmp(c->input, "SELECT", strlen("SELECT")));
     c->input += strlen("SELECT");
 }
 
+/*
+ * Match Relation and Column
+ * CFG:
+ * relation.column
+ */
 int parse_relation_column(struct_parse_context *c, struct_relation_column *relation_column) {
     // Should start with alphabet
     EXPECT_ALPHABET(c);
@@ -311,6 +341,11 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
     return PARSE_OK;
 }
 
+/*
+ * Match relation and column
+ * CFG:
+ * SUM(relation.column)
+ */
 int parse_first_line_sum(struct_parse_context *c, struct_relation_column *relation_column) {
     EXPECT(c, 'S');
 
@@ -326,7 +361,9 @@ int parse_first_line_sum(struct_parse_context *c, struct_relation_column *relati
 }
 
 /*
-Sums -> Sum | Sum,WhitespaceSums
+ * List of sums
+ * CFG:
+ * Sums -> Sum | Sum,WhitespaceSums
  */
 int parse_first_line_sums(struct_parse_context *c, struct_first_line *v) {
     // Should start with SUM
@@ -367,7 +404,9 @@ int parse_first_line_sums(struct_parse_context *c, struct_first_line *v) {
 }
 
 /*
-FirstLine -> SELECTWhitespaceSums
+ * First line of SQL query
+ * CFG:
+ * FirstLine -> SELECTWhitespaceSums
  */
 int parse_first_line(struct_parse_context *c, struct_first_line *v) {
     // should start with SELECT
@@ -378,12 +417,19 @@ int parse_first_line(struct_parse_context *c, struct_first_line *v) {
     return parse_first_line_sums(c, v);
 }
 
-// FROMWhitespaceRelations
+/*
+ * Match the beginning of second line of SQL query
+ * literal FROM
+ */
 void parse_second_line_from(struct_parse_context *c) {
     assert(0 == strncmp(c->input, "FROM", strlen("FROM")));
     c->input += strlen("FROM");
 }
 
+/*
+ * Match the relation given on second line of SQL query
+ * single alphabet
+ */
 int parse_second_line_relation(struct_parse_context *c, char *ch) {
     EXPECT_ALPHABET(c);
 
@@ -393,7 +439,11 @@ int parse_second_line_relation(struct_parse_context *c, char *ch) {
     return PARSE_OK;
 }
 
-// Relation | Relation,WhitespaceRelations
+/*
+ * Match a list of relations
+ * CFG:
+ * Relation | Relation,WhitespaceRelations
+ */
 int parse_second_line_relations(struct_parse_context *c, struct_second_line *v) {
     EXPECT_ALPHABET(c);
 
@@ -422,6 +472,11 @@ int parse_second_line_relations(struct_parse_context *c, struct_second_line *v) 
     return PARSE_OK;
 }
 
+/*
+ * Match the second line of SQL query
+ * CFG:
+ * SecondLine -> FROMWhitespaceRelations
+ */
 int parse_second_line(struct_parse_context *c, struct_second_line *v) {
     // FROM
     EXPECT(c, 'F');
@@ -432,20 +487,30 @@ int parse_second_line(struct_parse_context *c, struct_second_line *v) {
     return parse_second_line_relations(c, v);
 }
 
+/*
+ * Match literal WHERE at the beginning of third line of SQL query
+ */
 void parse_third_line_where(struct_parse_context *c) {
     assert(0 == strncmp(c->input, "WHERE", strlen("WHERE")));
     c->input += strlen("WHERE");
 }
 
-// Relation.ColumnWhitespace=WhitespaceRelation.Column
+/*
+ * Math JOIN
+ * CFG:
+ * Relation.ColumnWhitespace=WhitespaceRelation.Column
+ */
 int parse_third_line_join(struct_parse_context *c, struct_join *join) {
     EXPECT_ALPHABET(c);
 
     parse_relation_column(c, &join->lhs);
 
     parse_whitespace(c);
+
+    // skip = sign
     EXPECT(c, '=');
     c->input++;
+
     parse_whitespace(c);
 
     parse_relation_column(c, &join->rhs);
@@ -453,12 +518,19 @@ int parse_third_line_join(struct_parse_context *c, struct_join *join) {
     return PARSE_OK;
 }
 
+/*
+ * Match literal AND
+ */
 void parse_and(struct_parse_context *c) {
     assert(0 == strncmp(c->input, "AND", strlen("AND")));
     c->input += strlen("AND");
 }
 
-// Join | JoinWhitespaceANDWhitespaceJoins
+/*
+ * Match list of JOINs
+ * CFG:
+ * Join | JoinWhitespaceANDWhitespaceJoins
+ */
 int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
     EXPECT_ALPHABET(c);
 
@@ -498,7 +570,11 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
     return PARSE_OK;
 }
 
-// WHEREWhitespaceJoins
+/*
+ * Match third line of SQL query
+ * CFG:
+ * WHEREWhitespaceJoins
+ */
 int parse_third_line(struct_parse_context *c, struct_third_line *v) {
     // WHERE
     EXPECT(c, 'W');
@@ -510,16 +586,23 @@ int parse_third_line(struct_parse_context *c, struct_third_line *v) {
 }
 
 // todo
+/*
+ * Match fourth line of SQL query
+ * CFG:
+ * ANDWhitespacePredicates; | ANDWhitespaces;
+ */
 int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
     // AND
     EXPECT(c, 'A');
 
-
-
     return PARSE_OK;
 }
 
-
+/*
+ * Match one SQL query
+ * CFG:
+ * FirstLine Newline SecondLine Newline ThirdLine Newline FourthLine
+ */
 int parse_query(struct_parse_context *c, struct_query *v) {
     assert(c != NULL && v != NULL);
 
@@ -529,31 +612,22 @@ int parse_query(struct_parse_context *c, struct_query *v) {
     parse_newline(c);
     parse_third_line(c, &v->third);
     parse_newline(c);
-//    parse_fourth_line();
+    parse_fourth_line(c, &v->fourth);
 
     return PARSE_OK;
 }
 
+// todo
 /*
-Parse second part: number + queries of that number
-NumberNewlinesQueries
-*/
+ * Match second part of the input given to the program
+ * CFG:
+ * Number Newlines Queries
+ */
 int parse_second_part(struct_query *v, const char *input) {
     assert(v != NULL && input != NULL);
 
-    struct_parse_context c;
-    init_struct_parse_context(&c, input);
-
-//    parse_number();
-    parse_first_line(&c, &v->first);
-    parse_newline(&c);
-//    parse_second_line();
-
-    // check stack empty
-    free_struct_parse_context(&c);
-
     return PARSE_OK;
 }
 
-#endif //LITE_DB_TEST_LITEDB_H
+#endif //LITE_DB_LITEDB_H
 

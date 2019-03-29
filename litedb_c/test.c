@@ -31,22 +31,22 @@ do { \
     EXPECT_EQ_INT((int) (rc)->length_column, (int) strlen((rc)->val[1]));\
 } while (0)
 
-static void test_parse_firstline() {
-    struct_first_line firstline;
+static void test_parse_first_line() {
+    struct_first_line first_line;
 
     struct_parse_context c;
     init_struct_parse_context(&c, "SELECT SUM(D.c0), SUM(D.c4), SUM(C.c1)\n");
 
-    int ret = parse_first_line(&c, &firstline);
+    int ret = parse_first_line(&c, &first_line);
     // should return 0
     EXPECT_EQ_INT(0, ret);
 
     // check content size
-    EXPECT_EQ_INT(3, (int) firstline.length);
+    EXPECT_EQ_INT(3, (int) first_line.length);
     // check content
-    EXPECT_RELATION_COLUMN(&firstline.sums[0], "D", "c0");
-    EXPECT_RELATION_COLUMN(&firstline.sums[1], "D", "c4");
-    EXPECT_RELATION_COLUMN(&firstline.sums[2], "C", "c1");
+    EXPECT_RELATION_COLUMN(&first_line.sums[0], "D", "c0");
+    EXPECT_RELATION_COLUMN(&first_line.sums[1], "D", "c4");
+    EXPECT_RELATION_COLUMN(&first_line.sums[2], "C", "c1");
 }
 
 void test_parse_relation_column() {
@@ -254,7 +254,7 @@ static void test_parse() {
     test_parse_relation_column();
     test_parse_sum();
     test_parse_sums();
-    test_parse_firstline();
+    test_parse_first_line();
 
     // second line
     test_parse_second_line_relation();
@@ -265,6 +265,8 @@ static void test_parse() {
     test_parse_third_line_join();
     test_parse_third_line_joins();
     test_parse_third_line();
+
+    // fourth line
 
     // total
 //    test_parse_query();
