@@ -655,7 +655,6 @@ int parse_fourth_line_predicate(struct_parse_context *c, struct_predicate *p) {
     return PARSE_OK;
 }
 
-// todo
 /*
  * Match one or more predicates
  * CFG:
