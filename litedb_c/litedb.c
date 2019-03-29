@@ -109,6 +109,11 @@ typedef struct {
     struct_fourth_line fourth;
 } struct_query;
 
+typedef struct {
+    struct_query *queries;
+    size_t length;
+} struct_queries;
+
 // this struct stores information during parsing
 typedef struct {
     const char *input;
@@ -226,6 +231,18 @@ static void free_struct_query(struct_query *query) {
     free_struct_second_line(&query->second);
     free_struct_third_line(&query->third);
     free_struct_fourth_line(&query->fourth);
+}
+
+static void free_struct_queries(struct_queries *queries) {
+    assert(queries->length != 0);
+
+    for (int i = 0; i < queries->length; i++) {
+        free_struct_query(&queries->queries[i]);
+    }
+
+    free(queries->queries);
+    queries->queries = NULL;
+    queries->length = 0;
 }
 
 static void init_struct_parse_context(struct_parse_context *c, const char *input) {
@@ -726,7 +743,13 @@ int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
     }
 
     // Predicates
-    return parse_fourth_line_predicates(c, v);
+    int ret = parse_fourth_line_predicates(c, v);
+
+    // parse ';'
+    assert(c->input[0] == ';');
+    c->input++;
+
+    return ret;
 }
 
 /*
@@ -748,15 +771,71 @@ int parse_query(struct_parse_context *c, struct_query *v) {
     return PARSE_OK;
 }
 
-// todo
+/*
+ * Match one or many queries, separated by newline
+ * CFG:
+ * Query | QueryNewlinesQueries
+ */
+int parse_queries(struct_parse_context *c, struct_queries *queries) {
+    EXPECT_ALPHABET(c);
+
+    struct_query *query = NULL;
+
+    size_t head = c->top;
+
+    query = malloc(sizeof(struct_query));
+    parse_query(c, query);
+
+    // push into context
+    *(struct_query *) context_push(c, sizeof(struct_query)) = *query;
+    free(query);
+
+    while (c->input[0] == '\n' || c->input[0] == 'S') {
+        parse_newlines(c);
+
+        query = malloc(sizeof(struct_query));
+        parse_query(c, query);
+
+        // push into context
+        *(struct_query *) context_push(c, sizeof(struct_query)) = *query;
+        free(query);
+
+        parse_newlines(c);
+    }
+
+    size_t len = c->top - head;
+    const struct_query *tmp_queries = context_pop(c, len);
+
+    queries->queries = malloc(len);
+    memcpy(queries->queries, tmp_queries, len);
+    queries->length = len / sizeof(struct_query);
+
+    return PARSE_OK;
+}
+
 /*
  * Match second part of the input given to the program
  * CFG:
  * Number Newlines Queries
  */
-int parse_second_part(struct_query *v, const char *input) {
-    assert(v != NULL && input != NULL);
+int parse_second_part(struct_queries *queries, const char *input) {
+    assert(queries != NULL && input != NULL);
 
+    struct_parse_context c;
+    init_struct_parse_context(&c, input);
+
+    // expect number
+    char head = c.input[0];
+    assert('0' <= head && head <= '9');
+
+    int count_query = 0;
+    // we don't really need this number
+    parse_number(&c, &count_query);
+    parse_newline(&c);
+
+    parse_queries(&c, queries);
+
+    free_struct_parse_context(&c);
     return PARSE_OK;
 }
 

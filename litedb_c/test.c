@@ -52,7 +52,7 @@ static void test_parse_first_line() {
     free_struct_first_line(&first_line);
 }
 
-void test_parse_relation_column() {
+static void test_parse_relation_column() {
     struct_parse_context c;
     init_struct_parse_context(&c, "D.c0)");
 
@@ -66,7 +66,7 @@ void test_parse_relation_column() {
     free_struct_parse_context(&c);
 }
 
-void test_parse_sum() {
+static void test_parse_sum() {
     struct_parse_context c;
     init_struct_parse_context(&c, "SUM(D.c0)\n");
 
@@ -81,7 +81,7 @@ void test_parse_sum() {
     free_struct_parse_context(&c);
 }
 
-void test_parse_sums() {
+static void test_parse_sums() {
     struct_parse_context c;
     init_struct_parse_context(&c, "SUM(A.c1), SUM(C.c0), SUM(C.c3), SUM(C.c4)\n");
 
@@ -101,7 +101,7 @@ void test_parse_sums() {
     free_struct_first_line(&first);
 }
 
-void test_parse_query() {
+static void test_parse_query() {
     struct_parse_context c;
     init_struct_parse_context(&c,
                               "SELECT SUM(A.c1), SUM(C.c0), SUM(C.c3), SUM(C.c4)\nFROM A, C, D\nWHERE A.c2 = C.c0 AND A.c3 = D.c0 AND C.c2 = D.c2\nAND C.c1 < -4;");
@@ -152,7 +152,7 @@ void test_parse_query() {
     free_struct_query(&query);
 }
 
-void test_parse_second_line_relation() {
+static void test_parse_second_line_relation() {
     struct_parse_context c;
     init_struct_parse_context(&c, "A\n");
 
@@ -164,7 +164,7 @@ void test_parse_second_line_relation() {
     free_struct_parse_context(&c);
 }
 
-void test_parse_second_line_relations() {
+static void test_parse_second_line_relations() {
     struct_parse_context c;
     init_struct_parse_context(&c, "A, B, C, D\n");
 
@@ -182,7 +182,7 @@ void test_parse_second_line_relations() {
     free_struct_second_line(&sl);
 }
 
-void test_parse_secondline() {
+static void test_parse_secondline() {
     struct_parse_context c;
     init_struct_parse_context(&c, "FROM A, B, C, E\n");
 
@@ -200,7 +200,7 @@ void test_parse_secondline() {
     free_struct_second_line(&sl);
 }
 
-void test_parse_third_line_join() {
+static void test_parse_third_line_join() {
     struct_parse_context c;
     init_struct_parse_context(&c, "A.c2 = C.c0\n");
 
@@ -214,7 +214,7 @@ void test_parse_third_line_join() {
     free_struct_join(&join);
 }
 
-void test_parse_third_line_joins() {
+static void test_parse_third_line_joins() {
     struct_parse_context c;
     init_struct_parse_context(&c, "A.c2 = C.c0 AND A.c1 = B.c0 AND C.c1 = E.c0\n");
 
@@ -236,7 +236,7 @@ void test_parse_third_line_joins() {
     free_struct_third_line(&tl);
 }
 
-void test_parse_third_line() {
+static void test_parse_third_line() {
     struct_parse_context c;
     init_struct_parse_context(&c, "WHERE A.c2 = C.c0 AND A.c1 = B.c0 AND C.c1 = E.c0\n");
 
@@ -258,7 +258,7 @@ void test_parse_third_line() {
     free_struct_third_line(&tl);
 }
 
-void test_parse_fourth_line_predicate() {
+static void test_parse_fourth_line_predicate() {
     struct_parse_context c;
     init_struct_parse_context(&c, "C.c2 = -2247;");
 
@@ -273,7 +273,7 @@ void test_parse_fourth_line_predicate() {
     free_struct_predicate(&p);
 }
 
-void test_parse_fourth_line_predicates() {
+static void test_parse_fourth_line_predicates() {
     struct_parse_context c;
     init_struct_parse_context(&c, "C.c2 = -2247 AND A.c0 < -47;");
 
@@ -294,7 +294,7 @@ void test_parse_fourth_line_predicates() {
     free_struct_fourth_line(&fl);
 }
 
-void test_parse_fourth_line() {
+static void test_parse_fourth_line() {
     struct_parse_context c;
     init_struct_parse_context(&c, "AND C.c2 = -2247 AND A.c0 < -47;");
 
@@ -313,6 +313,38 @@ void test_parse_fourth_line() {
 
     free_struct_parse_context(&c);
     free_struct_fourth_line(&fl);
+}
+
+static void test_parse_queries() {
+    const char path[] = "/Users/zijie/IDE_Projects/DATABASE/data/xxxs/queries.sql";
+
+    // load content from file
+    char *input;
+    FILE *f = fopen(path, "r");
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
+
+    input = malloc(fsize + 1);
+    fread(input, fsize, 1, f);
+    fclose(f);
+
+    input[fsize] = 0;
+
+    assert(strlen(input) == fsize);
+
+    // load queries from input
+    struct_queries queries;
+
+    struct_parse_context c;
+    init_struct_parse_context(&c, input);
+
+    parse_queries(&c, &queries);
+
+    EXPECT_EQ_INT(30, (int)queries.length);
+
+    free_struct_parse_context(&c);
+    free_struct_queries(&queries);
 }
 
 static void test_parse() {
@@ -340,6 +372,8 @@ static void test_parse() {
 
     // total
     test_parse_query();
+
+    test_parse_queries();
 }
 
 int main() {
