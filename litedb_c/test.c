@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "litedb.h"
+#include "litedb.c"
 
 static int main_ret = 0;
 static int test_count = 0;
