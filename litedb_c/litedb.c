@@ -833,7 +833,7 @@ int parse_second_part(struct_queries *queries, const char *input) {
 
     // expect number
     char head = c.input[0];
-    assert('0' <= head && head <= '9');
+    assert(head == '\n' || ('0' <= head && head <= '9'));
 
     int count_query = 0;
     // we don't really need this number
@@ -861,12 +861,15 @@ void read_second_part_from_stdin(char **input) {
     while (getline(&line, &size, stdin) != -1) {
         strncpy((char *) context_push(&c, strlen(line)), line, strlen(line));
     }
+    free(line);
+    line = NULL;
 
     size_t len = c.top;
     const char *tmp_input = context_pop(&c, len);
 
-    *input = malloc(len);
+    *input = (char *) malloc(len + 1);
     memcpy(*input, tmp_input, len);
+    (*input)[len] = 0;
 
     free_struct_parse_context(&c);
 }

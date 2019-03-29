@@ -385,6 +385,10 @@ void test_parse_second_part() {
 }
 
 void test_parse_second_part_from_stdin() {
+    const char path[] = "./second_part.txt";
+    // redirect stdin
+    freopen(path, "r", stdin);
+
     char *input = NULL;
     read_second_part_from_stdin(&input);
 
@@ -423,9 +427,11 @@ static void test_parse() {
     test_parse_fourth_line_predicates();
     test_parse_fourth_line();
 
-    // total
+    // query and queries
     test_parse_query();
     test_parse_queries();
+
+    // second part
     test_parse_second_part();
     test_parse_second_part_from_stdin();
 }
