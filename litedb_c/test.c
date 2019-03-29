@@ -249,6 +249,62 @@ void test_parse_third_line() {
     free_struct_third_line(&tl);
 }
 
+void test_parse_fourth_line_predicate() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "C.c2 = -2247;");
+
+    struct_predicate p;
+    parse_fourth_line_predicate(&c, &p);
+
+    EXPECT_RELATION_COLUMN(&p.lhs, "C", "c2");
+    EXPECT_EQ_INT(EQUAL, p.operator);
+    EXPECT_EQ_INT(-2247, p.rhs);
+
+    free_struct_parse_context(&c);
+    free_struct_predicate(&p);
+}
+void test_parse_fourth_line_predicates() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "C.c2 = -2247 AND A.c0 < -47;");
+
+    struct_fourth_line fl;
+    parse_fourth_line_predicates(&c, &fl);
+
+    EXPECT_EQ_INT(2, (int)fl.length);
+
+    EXPECT_RELATION_COLUMN(&fl.predicates[0].lhs, "C", "c2");
+    EXPECT_EQ_INT(EQUAL, fl.predicates[0].operator);
+    EXPECT_EQ_INT(-2247, fl.predicates[0].rhs);
+
+    EXPECT_RELATION_COLUMN(&fl.predicates[1].lhs, "A", "c0");
+    EXPECT_EQ_INT(LESS_THAN, fl.predicates[1].operator);
+    EXPECT_EQ_INT(-47, fl.predicates[1].rhs);
+
+    free_struct_parse_context(&c);
+    free_struct_fourth_line(&fl);
+}
+
+void test_parse_fourth_line() {
+    struct_parse_context c;
+    init_struct_parse_context(&c, "AND C.c2 = -2247 AND A.c0 < -47;");
+
+    struct_fourth_line fl;
+    parse_fourth_line(&c, &fl);
+
+    EXPECT_EQ_INT(2, (int)fl.length);
+
+    EXPECT_RELATION_COLUMN(&fl.predicates[0].lhs, "C", "c2");
+    EXPECT_EQ_INT(EQUAL, fl.predicates[0].operator);
+    EXPECT_EQ_INT(-2247, fl.predicates[0].rhs);
+
+    EXPECT_RELATION_COLUMN(&fl.predicates[1].lhs, "A", "c0");
+    EXPECT_EQ_INT(LESS_THAN, fl.predicates[1].operator);
+    EXPECT_EQ_INT(-47, fl.predicates[1].rhs);
+
+    free_struct_parse_context(&c);
+    free_struct_fourth_line(&fl);
+}
+
 static void test_parse() {
     // first line
     test_parse_relation_column();
@@ -267,6 +323,9 @@ static void test_parse() {
     test_parse_third_line();
 
     // fourth line
+    test_parse_fourth_line_predicate();
+    test_parse_fourth_line_predicates();
+    test_parse_fourth_line();
 
     // total
 //    test_parse_query();

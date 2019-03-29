@@ -161,6 +161,7 @@ static void free_struct_relation_column(struct_relation_column *rc) {
     free(rc->val[0]);
     free(rc->val[1]);
     free(rc->val);
+    rc->val = NULL;
 
     rc->length_column = rc->length_relation = 0;
 }
@@ -171,6 +172,7 @@ static void free_struct_first_line(struct_first_line *fl) {
     }
 
     free(fl->sums);
+    fl->sums = NULL;
     fl->length = 0;
 }
 
@@ -178,6 +180,7 @@ static void free_struct_second_line(struct_second_line *sl) {
     assert(sl->length != 0);
 
     free(sl->relations);
+    sl->relations = NULL;
     sl->length = 0;
 }
 
@@ -194,6 +197,7 @@ static void free_struct_third_line(struct_third_line *tl) {
     }
 
     free(tl->joins);
+    tl->joins = NULL;
     tl->length = 0;
 }
 
@@ -202,13 +206,16 @@ static void free_struct_predicate(struct_predicate *p) {
 }
 
 static void free_struct_fourth_line(struct_fourth_line *fl) {
-    assert(fl->length != 0);
+    if (fl->length == 0) {
+        return;
+    }
 
     for (int i = 0; i < fl->length; i++) {
-        free_struct_predicate(&fl->predicates[0]);
+        free_struct_predicate(&fl->predicates[i]);
     }
 
     free(fl->predicates);
+    fl->predicates = NULL;
     fl->length = 0;
 }
 
@@ -229,6 +236,7 @@ static void free_struct_parse_context(struct_parse_context *c) {
     assert(c->top == 0);
 
     free(c->stack);
+    c->stack = NULL;
     c->top = c->size = 0;
 }
 
@@ -538,7 +546,7 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
 
     size_t head = c->top;
 
-    // left hand side
+    // first join
     join = malloc(sizeof(struct_join));
     parse_third_line_join(c, join);
 
@@ -552,6 +560,7 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
         parse_and(c);
         parse_whitespace(c);
 
+        // following joins
         join = malloc(sizeof(struct_join));
         parse_third_line_join(c, join);
 
@@ -585,7 +594,107 @@ int parse_third_line(struct_parse_context *c, struct_third_line *v) {
     return parse_third_line_joins(c, v);
 }
 
+/*
+ * Match comparision operator
+ * =, > or <
+ */
+int parse_operator(struct_parse_context *c, enum_operator *op) {
+    switch (c->input[0]) {
+        case '=':
+            *op = EQUAL;
+            break;
+        case '>':
+            *op = GREATER_THAN;
+            break;
+        case '<':
+            *op = LESS_THAN;
+            break;
+        default:
+            assert(0);
+            return PARSE_FAILED;
+    }
+
+    c->input++;
+
+    return PARSE_OK;
+}
+
+/*
+ * Match an Integer
+ */
+int parse_number(struct_parse_context *c, int *num) {
+    char *tail = NULL;
+    *num = strtol(c->input, &tail, 0);
+
+    c->input = tail;
+
+    return PARSE_OK;
+}
+
+/*
+ * Match single predicate
+ * CFG:
+ * Relation.ColumnWhitespaceOperatorWhitespaceNumber
+ */
+int parse_fourth_line_predicate(struct_parse_context *c, struct_predicate *p) {
+    EXPECT_ALPHABET(c);
+
+    parse_relation_column(c, &p->lhs);
+
+    parse_whitespace(c);
+    parse_operator(c, &p->operator);
+    parse_whitespace(c);
+
+    parse_number(c, &p->rhs);
+
+    return PARSE_OK;
+}
+
 // todo
+/*
+ * Match one or more predicates
+ * CFG:
+ * Predicate | PredicateWhitespaceANDWhitespacePredicates
+ */
+int parse_fourth_line_predicates(struct_parse_context *c, struct_fourth_line *fl) {
+    EXPECT_ALPHABET(c);
+
+    struct_predicate *p = NULL;
+
+    size_t head = c->top;
+
+    // first predicate
+    p = malloc(sizeof(struct_predicate));
+    parse_fourth_line_predicate(c, p);
+
+    // push into context
+    *(struct_predicate *) context_push(c, sizeof(struct_predicate)) = *p;
+    free(p);
+
+    while (c->input[0] == ' ') {
+        parse_whitespace(c);
+        parse_and(c);
+        parse_whitespace(c);
+
+        // following predicates
+        p = malloc(sizeof(struct_predicate));
+        parse_fourth_line_predicate(c, p);
+
+        // push into context
+        *(struct_predicate *) context_push(c, sizeof(struct_predicate)) = *p;
+        free(p);
+    }
+
+    size_t len = c->top - head;
+    const struct_predicate *predicates = context_pop(c, len);
+
+    fl->predicates = malloc(len);
+    memcpy(fl->predicates, predicates, len);
+    fl->length = len / sizeof(struct_predicate);
+
+    return PARSE_OK;
+}
+
 /*
  * Match fourth line of SQL query
  * CFG:
@@ -595,7 +704,22 @@ int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
     // AND
     EXPECT(c, 'A');
 
-    return PARSE_OK;
+    // AND
+    parse_and(c);
+
+    // whitespace
+    parse_whitespace(c);
+
+    // no predicates
+    if (c->input[0] == ';') {
+        c->input++;
+        v->length = 0;
+        v->predicates = NULL;
+        return PARSE_OK;
+    }
+
+    // Predicates
+    return parse_fourth_line_predicates(c, v);
 }
 
 /*
