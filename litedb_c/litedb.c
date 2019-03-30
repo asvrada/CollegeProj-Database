@@ -265,30 +265,9 @@ static void free_struct_parse_context(struct_parse_context *c) {
 // parse //
 ///////////
 
-// skip whitespaces as many as possible
-void parse_whitespaces(struct_parse_context *c) {
-    while (c->input[0] == ' ') {
-        c->input++;
-    }
-}
-
 // skip one whitespace if there is one
 void parse_whitespace(struct_parse_context *c) {
-    if (c->input[0] == ' ') {
-        c->input++;
-    }
-}
-
-// skip newlines as many as possible
-void parse_newlines(struct_parse_context *c) {
-    while (c->input[0] == '\n') {
-        c->input++;
-    }
-}
-
-// skip one newline if there is one
-void parse_newline(struct_parse_context *c) {
-    if (c->input[0] == '\n') {
+    while (c->input[0] == '\n' || c->input[0] == ' ') {
         c->input++;
     }
 }
@@ -585,6 +564,7 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
     *(struct_join *) context_push(c, sizeof(struct_join)) = *join;
     free(join);
 
+    // will end because third line ends with \n
     while (c->input[0] == ' ') {
         // skip ws AND ws
         parse_whitespace(c);
@@ -768,12 +748,13 @@ int parse_query(struct_parse_context *c, struct_query *v) {
     assert(c != NULL && v != NULL);
 
     parse_first_line(c, &v->first);
-    parse_newline(c);
+    parse_whitespace(c);
     parse_second_line(c, &v->second);
-    parse_newline(c);
+    parse_whitespace(c);
     parse_third_line(c, &v->third);
-    parse_newline(c);
+    parse_whitespace(c);
     parse_fourth_line(c, &v->fourth);
+    parse_whitespace(c);
 
     return PARSE_OK;
 }
@@ -784,7 +765,8 @@ int parse_query(struct_parse_context *c, struct_query *v) {
  * Query | QueryNewlinesQueries
  */
 int parse_queries(struct_parse_context *c, struct_queries *queries) {
-    EXPECT_ALPHABET(c);
+    // begin with SELECT
+    EXPECT(c, 'S');
 
     struct_query *query = NULL;
 
@@ -797,8 +779,9 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
     *(struct_query *) context_push(c, sizeof(struct_query)) = *query;
     free(query);
 
-    while (c->input[0] == '\n' || c->input[0] == 'S') {
-        parse_newlines(c);
+    // THere are more queries
+    while (c->input[0] == 'S') {
+        parse_whitespace(c);
 
         query = malloc(sizeof(struct_query));
         parse_query(c, query);
@@ -806,8 +789,6 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
         // push into context
         *(struct_query *) context_push(c, sizeof(struct_query)) = *query;
         free(query);
-
-        parse_newlines(c);
     }
 
     size_t len = c->top - head;
@@ -833,12 +814,12 @@ int parse_second_part(struct_queries *queries, const char *input) {
 
     // expect number
     char head = c.input[0];
-    assert(head == '\n' || ('0' <= head && head <= '9'));
+    assert('0' <= head && head <= '9');
 
     int count_query = 0;
     // we don't really need this number
     parse_number(&c, &count_query);
-    parse_newline(&c);
+    parse_whitespace(&c);
 
     parse_queries(&c, queries);
 
