@@ -44,12 +44,12 @@ typedef enum {
 
 // SUM(D.c0)
 typedef struct {
-    // 2D string
-    // char[0] = string of the relation
-    // char[1] = string of the column
-    char **val;
-    // length of the relation string (not including \0)
-    size_t length_relation;
+    // single char, represents the name of relation
+    char relation;
+
+    // string, represents the name of column
+    char *column;
+
     // length of the column string (same)
     size_t length_column;
 } struct_relation_column;
@@ -164,14 +164,14 @@ static void *context_push(struct_parse_context *c, size_t size) {
 ////////////////////////////
 
 static void free_struct_relation_column(struct_relation_column *rc) {
-    assert(rc->val != NULL);
+    assert(rc->column != NULL);
 
-    free(rc->val[0]);
-    free(rc->val[1]);
-    free(rc->val);
-    rc->val = NULL;
+    rc->relation = '\0';
 
-    rc->length_column = rc->length_relation = 0;
+    free(rc->column);
+    rc->column = NULL;
+
+    rc->length_column = 0;
 }
 
 static void free_struct_first_line(struct_first_line *fl) {
@@ -293,8 +293,6 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
     size_t head = c->top;
     const char *tmp_p = c->input;
 
-    relation_column->val = (char **) malloc(2 * sizeof(char *));
-
     // parse relation
     while (1) {
         char ch = tmp_p[0];
@@ -302,13 +300,10 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
         // end of relation
         if (ch == '.') {
             size_t len = c->top - head;
-            const char *str = context_pop(c, len);
+            const char *relation = context_pop(c, len);
 
-            // copy this str to struct
-            relation_column->val[0] = (char *) malloc(len + 1);
-            memcpy(relation_column->val[0], str, len);
-            relation_column->val[0][len] = '\0';
-            relation_column->length_relation = len;
+            // copy this relation
+            relation_column->relation = *relation;
 
             c->input = tmp_p;
             break;
@@ -332,10 +327,10 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
         if (!IS_ALPHABET_OR_NUMERIC(ch)) {
             size_t len = c->top - head;
             const char *str = context_pop(c, len);
-            // copy str
-            relation_column->val[1] = (char *) malloc(len + 1);
-            memcpy(relation_column->val[1], str, len);
-            relation_column->val[1][len] = '\0';
+            // copy string
+            relation_column->column = (char *) malloc(len + 1);
+            memcpy(relation_column->column, str, len);
+            relation_column->column[len] = '\0';
             relation_column->length_column = len;
 
             c->input = tmp_p;

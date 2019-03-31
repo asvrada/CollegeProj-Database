@@ -23,13 +23,13 @@ do {\
 #define EXPECT_EQ_STRING(expect, actual, alength) \
 EXPECT_EQ_BASE(sizeof(expect) - 1 == alength && memcmp(expect, actual, alength + 1) == 0, expect, actual, "%s")
 
-#define EXPECT_RELATION_COLUMN(rc, relation, column) \
+#define EXPECT_RELATION_COLUMN(rc, re, col) \
 do { \
-    EXPECT_EQ_STRING((relation), (rc)->val[0], strlen((relation)));\
-    EXPECT_EQ_STRING((column), (rc)->val[1], strlen((column)));\
-    EXPECT_EQ_INT((int) (rc)->length_relation, (int) strlen((rc)->val[0]));\
-    EXPECT_EQ_INT((int) (rc)->length_column, (int) strlen((rc)->val[1]));\
+    EXPECT_EQ_CHAR((re), (rc)->relation);\
+    EXPECT_EQ_STRING((col), (rc)->column, strlen((col)));\
+    EXPECT_EQ_INT((int) (rc)->length_column, (int) strlen((rc)->column));\
 } while (0)
+
 
 static void test_parse_first_line() {
     struct_parse_context c;
@@ -44,9 +44,9 @@ static void test_parse_first_line() {
     // check content size
     EXPECT_EQ_INT(3, (int) first_line.length);
     // check content
-    EXPECT_RELATION_COLUMN(&first_line.sums[0], "D", "c0");
-    EXPECT_RELATION_COLUMN(&first_line.sums[1], "D", "c4");
-    EXPECT_RELATION_COLUMN(&first_line.sums[2], "C", "c1");
+    EXPECT_RELATION_COLUMN(&first_line.sums[0], 'D', "c0");
+    EXPECT_RELATION_COLUMN(&first_line.sums[1], 'D', "c4");
+    EXPECT_RELATION_COLUMN(&first_line.sums[2], 'C', "c1");
 
     free_struct_parse_context(&c);
     free_struct_first_line(&first_line);
@@ -60,7 +60,7 @@ static void test_parse_relation_column() {
 
     parse_relation_column(&c, &rc);
 
-    EXPECT_RELATION_COLUMN(&rc, "D", "c0");
+    EXPECT_RELATION_COLUMN(&rc, 'D', "c0");
 
     free_struct_relation_column(&rc);
     free_struct_parse_context(&c);
@@ -75,7 +75,7 @@ static void test_parse_sum() {
     // run
     parse_first_line_sum(&c, &rc);
 
-    EXPECT_RELATION_COLUMN(&rc, "D", "c0");
+    EXPECT_RELATION_COLUMN(&rc, 'D', "c0");
 
     free_struct_relation_column(&rc);
     free_struct_parse_context(&c);
@@ -92,10 +92,10 @@ static void test_parse_sums() {
 
     EXPECT_EQ_INT(4, (int) first.length);
 
-    EXPECT_RELATION_COLUMN(&first.sums[0], "A", "c1");
-    EXPECT_RELATION_COLUMN(&first.sums[1], "C", "c0");
-    EXPECT_RELATION_COLUMN(&first.sums[2], "C", "c3");
-    EXPECT_RELATION_COLUMN(&first.sums[3], "C", "c4");
+    EXPECT_RELATION_COLUMN(&first.sums[0], 'A', "c1");
+    EXPECT_RELATION_COLUMN(&first.sums[1], 'C', "c0");
+    EXPECT_RELATION_COLUMN(&first.sums[2], 'C', "c3");
+    EXPECT_RELATION_COLUMN(&first.sums[3], 'C', "c4");
 
     free_struct_parse_context(&c);
     free_struct_first_line(&first);
@@ -114,10 +114,10 @@ static void test_parse_query() {
 
     EXPECT_EQ_INT(4, (int) first.length);
 
-    EXPECT_RELATION_COLUMN(&first.sums[0], "A", "c1");
-    EXPECT_RELATION_COLUMN(&first.sums[1], "C", "c0");
-    EXPECT_RELATION_COLUMN(&first.sums[2], "C", "c3");
-    EXPECT_RELATION_COLUMN(&first.sums[3], "C", "c4");
+    EXPECT_RELATION_COLUMN(&first.sums[0], 'A', "c1");
+    EXPECT_RELATION_COLUMN(&first.sums[1], 'C', "c0");
+    EXPECT_RELATION_COLUMN(&first.sums[2], 'C', "c3");
+    EXPECT_RELATION_COLUMN(&first.sums[3], 'C', "c4");
 
     // check second line
     struct_second_line second = query.second;
@@ -130,20 +130,20 @@ static void test_parse_query() {
     struct_third_line third = query.third;
 
     EXPECT_EQ_INT(3, (int) third.length);
-    EXPECT_RELATION_COLUMN(&third.joins[0].lhs, "A", "c2");
-    EXPECT_RELATION_COLUMN(&third.joins[0].rhs, "C", "c0");
+    EXPECT_RELATION_COLUMN(&third.joins[0].lhs, 'A', "c2");
+    EXPECT_RELATION_COLUMN(&third.joins[0].rhs, 'C', "c0");
 
-    EXPECT_RELATION_COLUMN(&third.joins[1].lhs, "A", "c3");
-    EXPECT_RELATION_COLUMN(&third.joins[1].rhs, "D", "c0");
+    EXPECT_RELATION_COLUMN(&third.joins[1].lhs, 'A', "c3");
+    EXPECT_RELATION_COLUMN(&third.joins[1].rhs, 'D', "c0");
 
-    EXPECT_RELATION_COLUMN(&third.joins[2].lhs, "C", "c2");
-    EXPECT_RELATION_COLUMN(&third.joins[2].rhs, "D", "c2");
+    EXPECT_RELATION_COLUMN(&third.joins[2].lhs, 'C', "c2");
+    EXPECT_RELATION_COLUMN(&third.joins[2].rhs, 'D', "c2");
 
     struct_fourth_line fourth = query.fourth;
 
     EXPECT_EQ_INT(1, (int) fourth.length);
 
-    EXPECT_RELATION_COLUMN(&fourth.predicates[0].lhs, "C", "c1");
+    EXPECT_RELATION_COLUMN(&fourth.predicates[0].lhs, 'C', "c1");
     EXPECT_EQ_INT(LESS_THAN, fourth.predicates[0].operator);
     EXPECT_EQ_INT(-4, fourth.predicates[0].rhs);
 
@@ -207,8 +207,8 @@ static void test_parse_third_line_join() {
     struct_join join;
     parse_third_line_join(&c, &join);
 
-    EXPECT_RELATION_COLUMN(&join.lhs, "A", "c2");
-    EXPECT_RELATION_COLUMN(&join.rhs, "C", "c0");
+    EXPECT_RELATION_COLUMN(&join.lhs, 'A', "c2");
+    EXPECT_RELATION_COLUMN(&join.rhs, 'C', "c0");
 
     free_struct_parse_context(&c);
     free_struct_join(&join);
@@ -223,14 +223,14 @@ static void test_parse_third_line_joins() {
 
     EXPECT_EQ_INT(3, (int) tl.length);
 
-    EXPECT_RELATION_COLUMN(&tl.joins[0].lhs, "A", "c2");
-    EXPECT_RELATION_COLUMN(&tl.joins[0].rhs, "C", "c0");
+    EXPECT_RELATION_COLUMN(&tl.joins[0].lhs, 'A', "c2");
+    EXPECT_RELATION_COLUMN(&tl.joins[0].rhs, 'C', "c0");
 
-    EXPECT_RELATION_COLUMN(&tl.joins[1].lhs, "A", "c1");
-    EXPECT_RELATION_COLUMN(&tl.joins[1].rhs, "B", "c0");
+    EXPECT_RELATION_COLUMN(&tl.joins[1].lhs, 'A', "c1");
+    EXPECT_RELATION_COLUMN(&tl.joins[1].rhs, 'B', "c0");
 
-    EXPECT_RELATION_COLUMN(&tl.joins[2].lhs, "C", "c1");
-    EXPECT_RELATION_COLUMN(&tl.joins[2].rhs, "E", "c0");
+    EXPECT_RELATION_COLUMN(&tl.joins[2].lhs, 'C', "c1");
+    EXPECT_RELATION_COLUMN(&tl.joins[2].rhs, 'E', "c0");
 
     free_struct_parse_context(&c);
     free_struct_third_line(&tl);
@@ -245,14 +245,14 @@ static void test_parse_third_line() {
 
     EXPECT_EQ_INT(3, (int) tl.length);
 
-    EXPECT_RELATION_COLUMN(&tl.joins[0].lhs, "A", "c2");
-    EXPECT_RELATION_COLUMN(&tl.joins[0].rhs, "C", "c0");
+    EXPECT_RELATION_COLUMN(&tl.joins[0].lhs, 'A', "c2");
+    EXPECT_RELATION_COLUMN(&tl.joins[0].rhs, 'C', "c0");
 
-    EXPECT_RELATION_COLUMN(&tl.joins[1].lhs, "A", "c1");
-    EXPECT_RELATION_COLUMN(&tl.joins[1].rhs, "B", "c0");
+    EXPECT_RELATION_COLUMN(&tl.joins[1].lhs, 'A', "c1");
+    EXPECT_RELATION_COLUMN(&tl.joins[1].rhs, 'B', "c0");
 
-    EXPECT_RELATION_COLUMN(&tl.joins[2].lhs, "C", "c1");
-    EXPECT_RELATION_COLUMN(&tl.joins[2].rhs, "E", "c0");
+    EXPECT_RELATION_COLUMN(&tl.joins[2].lhs, 'C', "c1");
+    EXPECT_RELATION_COLUMN(&tl.joins[2].rhs, 'E', "c0");
 
     free_struct_parse_context(&c);
     free_struct_third_line(&tl);
@@ -265,7 +265,7 @@ static void test_parse_fourth_line_predicate() {
     struct_predicate p;
     parse_fourth_line_predicate(&c, &p);
 
-    EXPECT_RELATION_COLUMN(&p.lhs, "C", "c2");
+    EXPECT_RELATION_COLUMN(&p.lhs, 'C', "c2");
     EXPECT_EQ_INT(EQUAL, p.operator);
     EXPECT_EQ_INT(-2247, p.rhs);
 
@@ -282,11 +282,11 @@ static void test_parse_fourth_line_predicates() {
 
     EXPECT_EQ_INT(2, (int) fl.length);
 
-    EXPECT_RELATION_COLUMN(&fl.predicates[0].lhs, "C", "c2");
+    EXPECT_RELATION_COLUMN(&fl.predicates[0].lhs, 'C', "c2");
     EXPECT_EQ_INT(EQUAL, fl.predicates[0].operator);
     EXPECT_EQ_INT(-2247, fl.predicates[0].rhs);
 
-    EXPECT_RELATION_COLUMN(&fl.predicates[1].lhs, "A", "c0");
+    EXPECT_RELATION_COLUMN(&fl.predicates[1].lhs, 'A', "c0");
     EXPECT_EQ_INT(LESS_THAN, fl.predicates[1].operator);
     EXPECT_EQ_INT(-47, fl.predicates[1].rhs);
 
@@ -303,11 +303,11 @@ static void test_parse_fourth_line() {
 
     EXPECT_EQ_INT(2, (int) fl.length);
 
-    EXPECT_RELATION_COLUMN(&fl.predicates[0].lhs, "C", "c2");
+    EXPECT_RELATION_COLUMN(&fl.predicates[0].lhs, 'C', "c2");
     EXPECT_EQ_INT(EQUAL, fl.predicates[0].operator);
     EXPECT_EQ_INT(-2247, fl.predicates[0].rhs);
 
-    EXPECT_RELATION_COLUMN(&fl.predicates[1].lhs, "A", "c0");
+    EXPECT_RELATION_COLUMN(&fl.predicates[1].lhs, 'A', "c0");
     EXPECT_EQ_INT(LESS_THAN, fl.predicates[1].operator);
     EXPECT_EQ_INT(-47, fl.predicates[1].rhs);
 
