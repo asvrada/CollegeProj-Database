@@ -1,8 +1,8 @@
 # Design
 
-## What the assignment requires from the program
+## What should program do
 
-There are two parts of the program: Indexing and Querying.
+There are two main parts in this program: Indexing and Querying.
 
 ### Indexing
 
@@ -29,43 +29,62 @@ For each query string:
 	* Deep Left Join, to find use DP
 * Output result to stdout
 
-## Input format in CFG
+## Components
 
-Input -> `Paths``Newlines``Number``Newlines``Queries`
+1. data loader
+2. parser
+3. catalog
+4. optimizer
+5. execution engine
 
-Paths -> `Path` | `Path`,`Whitespaces``Paths`  
+### Data loader
+**Input**: 
 
-// this is the data format for CSV files  
-Data -> 
+path to each csv file
 
-Whitespaces -> None | `Whitespace` | `Whitespace``Whitespaces` 
-  
-Queries -> `Query` | `Query``Newlines``Queries`  
+**Output**:
 
-Newlines -> `Newline` | `Newline``Newlines`  
+Some better format of these data
 
-Query -> `FirstLine``Newline``SecondLine``Newline``ThirdLine``Newline``FourthLine`
+For each relation (csv file), we generate one file. The output file should contains two parts: metadata and data.
 
-FirstLine -> SELECT`Whitespace``Sums`
+#### Metadata
 
-Sums -> `Sum` | `Sum`,`Whitespace``Sums`
+Preferably size of multiple of 4KB (page size).
 
-Sum -> SUM(`Relation`.`Column`)
+Stores metadata like catalog, B-tree (if possible), etc.
 
-SecondLine -> FROM`Whitespace``Relations`
+Data layout (all unit in bytes):
 
-Relations -> `Relation` | `Relation`,`Whitespace``Relations`
+size of metadata (multiple of size of block, 1 means sizeof(metadata) == 4096 Bytes)
 
-ThirdLine -> WHERE`Whitespace``Joins`
+number of column
 
-Joins -> `Join` | `Join``Whitespace`AND`Whitespace``Joins`
+### Parser
+**Input**: 
 
-Join -> `Relation`.`Column``Whitespace`=`Whitespace``Relation`.`Column`
+SQL query
 
-FourthLine -> AND`Whitespace``Predicates`; | AND`Whitespaces`;
+**Output**:  
 
-Predicates -> `Predicate` | `Predicate``Whitespace`AND`Whitespace``Predicates`
+1. Column to select  
+1. Relation to join (and on which column)  
+2. Predicates
 
-Predicate -> `Relation`.`Column``Whitespace``Operator``Whitespace``Number`
+### Catalog
 
-Operator -> = | > | <
+Store metadata about relation and column, like min, max, number of unique value.
+
+### Optimizer
+
+**Input**: SQL
+
+**Output**: Join order, tree of operators (relational algebra)
+
+Decide the join order
+
+### Execution Engine
+
+Actually do the job.
+
+Block nested join, etc.

@@ -822,6 +822,10 @@ int parse_second_part(struct_queries *queries, const char *input) {
     return PARSE_OK;
 }
 
+/**
+ * Read from stdin and assign the value to *input
+ * @param input: pointer to a pointer to the char array. The value will be modified by this function to point to a pointer of char array created by malloc, so please free it after use.
+ */
 void read_second_part_from_stdin(char **input) {
     assert(input != NULL);
 
