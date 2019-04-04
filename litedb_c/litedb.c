@@ -1,8 +1,8 @@
-//
-// Created by ZiJie Wu on 2019-03-28.
-//
 /*
- * The entire Database assignment in one GIANT source file, just to make compile easier
+ * Created by ZiJie Wu on 2019-03-28.
+ * The entire Database assignment in one GIANT source file, just to make compiling easier
+ *
+ * It comprises of several components: data loader, parser
  */
 #ifndef LITE_DB_LITEDB_C
 #define LITE_DB_LITEDB_C
@@ -15,7 +15,7 @@
 #define ASSERT(val) \
 do {\
     if (!(val)) {\
-        fprintf(stderr, "%s:%d: assert failed\n", __FILE__, __LINE__);\
+        fprintf(stderr, "%s:%d: runtime assert failed\n", __FILE__, __LINE__);\
     }\
 } while(0)
 
@@ -192,7 +192,7 @@ typedef struct {
     size_t length;
 } struct_third_line;
 
-// D.c3 = -9496
+// D.c3 < -9496
 typedef struct {
     struct_relation_column lhs;
     enum_operator operator;
@@ -335,6 +335,7 @@ static void free_struct_predicate(struct_predicate *p) {
 static void free_struct_fourth_line(struct_fourth_line *fl) {
     ASSERT(fl != NULL);
 
+    // this line may be empty
     if (fl->length == 0) {
         return;
     }
@@ -832,8 +833,16 @@ int parse_fourth_line_predicates(struct_parse_context *c, struct_fourth_line *fl
  * ANDWhitespacePredicates; | ANDWhitespaces;
  */
 int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
-    // AND
-    EXPECT(c, 'A');
+    // AND or ; (empty)
+    ASSERT(c->input[0] == 'A' || c->input[0] == ';');
+
+    if (c->input[0] == ';') {
+        c->input++;
+
+        v->predicates = NULL;
+        v->length = 0;
+        return PARSE_OK;
+    }
 
     // AND
     parse_and(c);
@@ -841,7 +850,7 @@ int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
     // whitespace
     parse_whitespace(c);
 
-    // no predicates
+    // no predicates after AND
     if (c->input[0] == ';') {
         c->input++;
         v->length = 0;

@@ -374,11 +374,14 @@ void test_parse_second_part() {
 
     parse_second_part(&queries, input);
 
-    EXPECT_EQ_INT(3, (int) queries.length);
+    EXPECT_EQ_INT(4, (int) queries.length);
 
     // check some results by hand
     EXPECT_EQ_STRING("ABCD", queries.queries[0].second.relations, strlen("ABCD"));
-    EXPECT_EQ_INT(7789, queries.queries[1].fourth.predicates[0].rhs);
+    EXPECT_EQ_INT(-9496, queries.queries[0].fourth.predicates[0].rhs);
+    EXPECT_EQ_INT(1, queries.queries[0].fourth.predicates[1].rhs);
+
+    EXPECT_EQ_INT(0, (int) queries.queries[1].fourth.length);
 
     // clean up
     free_struct_queries(&queries);
@@ -397,7 +400,11 @@ void test_parse_second_part_from_stdin() {
 
     parse_second_part(&queries, input);
 
-    EXPECT_EQ_INT(3, (int) queries.length);
+    EXPECT_EQ_INT(4, (int) queries.length);
+
+    EXPECT_EQ_STRING("ABCDE", queries.queries[1].second.relations, strlen("ABCDE"));
+    EXPECT_EQ_INT(0, (int) queries.queries[1].fourth.length);
+    EXPECT_EQ_INT(0, (int) queries.queries[3].fourth.length);
 
     // clean up
     free_struct_queries(&queries);
@@ -564,6 +571,7 @@ void test_read_bytes() {
 }
 
 int main() {
+    // test assert
     ASSERT(1);
     test_parse();
 //    test_read_bytes();

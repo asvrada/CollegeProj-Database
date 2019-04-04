@@ -14,6 +14,8 @@ Done.
 
 Next: while reading file, store them to in memory arrays, while outputing to file.
 
+Also, output to file in page block?
+
 ## Simple table scan with a predicate
 
 > Figure out how to do a table scan with a predicate. This means you need to be able to read that format you wrote out for step 1, check to see if each row matches a particular predicate, and then emit the matching rows. Make sure that however you "emit" rows is somewhat composable, for example, a Java Iterable or Iterator.

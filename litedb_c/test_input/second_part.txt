@@ -1,16 +1,20 @@
-3
+4
 SELECT SUM(D.c0), SUM(D.c4), SUM(C.c1)
 FROM A, B, C, D
 WHERE A.c1 = B.c0 AND A.c3 = D.c0 AND C.c2 = D.c2
-AND D.c3 = -9496;
+AND D.c3 = -9496 AND A.c3 = 1;
 
 SELECT SUM(B.c2), SUM(B.c1), SUM(C.c1), SUM(C.c2)
 FROM A, B, C, D, E
 WHERE A.c3 = D.c0 AND A.c1 = B.c0 AND C.c2 = D.c2 AND C.c1 = E.c0
-AND A.c0 < 7789;
+;
 
 SELECT SUM(D.c1), SUM(C.c3), SUM(C.c2)
 FROM A, B, C, D, E
 WHERE A.c2 = C.c0 AND C.c2 = D.c2 AND C.c1 = E.c0 AND A.c1 = B.c0
 AND B.c2 = -8622;
 
+SELECT SUM(D.c1), SUM(C.c3), SUM(C.c2)
+FROM A, B, C, D, E
+WHERE A.c2 = C.c0 AND C.c2 = D.c2 AND C.c1 = E.c0 AND A.c1 = B.c0
+AND;
