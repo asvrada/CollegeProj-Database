@@ -11,6 +11,42 @@
 #include <assert.h>
 #include <string.h>
 
+/*
+ _______               __                      __                                  __
+/       \             /  |                    /  |                                /  |
+$$$$$$$  |  ______   _$$ |_     ______        $$ |        ______    ______    ____$$ |  ______    ______
+$$ |  $$ | /      \ / $$   |   /      \       $$ |       /      \  /      \  /    $$ | /      \  /      \
+$$ |  $$ | $$$$$$  |$$$$$$/    $$$$$$  |      $$ |      /$$$$$$  | $$$$$$  |/$$$$$$$ |/$$$$$$  |/$$$$$$  |
+$$ |  $$ | /    $$ |  $$ | __  /    $$ |      $$ |      $$ |  $$ | /    $$ |$$ |  $$ |$$    $$ |$$ |  $$/
+$$ |__$$ |/$$$$$$$ |  $$ |/  |/$$$$$$$ |      $$ |_____ $$ \__$$ |/$$$$$$$ |$$ \__$$ |$$$$$$$$/ $$ |
+$$    $$/ $$    $$ |  $$  $$/ $$    $$ |      $$       |$$    $$/ $$    $$ |$$    $$ |$$       |$$ |
+$$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$$$$$/  $$$$$$$/ $$/
+ */
+
+
+/**
+ * Read one line from stdin and assign it to *input
+ * @param input: the pointer to the pointer to char array
+ */
+void read_first_part_from_stdin(char **input) {
+    assert(input != NULL);
+
+    size_t size = 0;
+    getline(input, &size, stdin);
+}
+
+/*
+ _______
+/       \
+$$$$$$$  | ______    ______    _______   ______    ______
+$$ |__$$ |/      \  /      \  /       | /      \  /      \
+$$    $$/ $$$$$$  |/$$$$$$  |/$$$$$$$/ /$$$$$$  |/$$$$$$  |
+$$$$$$$/  /    $$ |$$ |  $$/ $$      \ $$    $$ |$$ |  $$/
+$$ |     /$$$$$$$ |$$ |       $$$$$$  |$$$$$$$$/ $$ |
+$$ |     $$    $$ |$$ |      /     $$/ $$       |$$ |
+$$/       $$$$$$$/ $$/       $$$$$$$/   $$$$$$$/ $$/
+ */
+
 #ifndef PARSE_STACK_INIT_SIZE
 #define PARSE_STACK_INIT_SIZE 256
 #endif
@@ -147,7 +183,8 @@ static void *context_push(struct_parse_context *c, size_t size) {
         }
 
         while (c->top + size >= c->size) {
-            // size = size * 1.5
+            // expand the size to 1.5 times the original size
+            // size += size / 2
             c->size += c->size >> 1;
         }
 
@@ -823,7 +860,7 @@ int parse_second_part(struct_queries *queries, const char *input) {
 }
 
 /**
- * Read from stdin and assign the value to *input
+ * Read string from stdin and assign the value to *input
  * @param input: pointer to a pointer to the char array. The value will be modified by this function to point to a pointer of char array created by malloc, so please free it after use.
  */
 void read_second_part_from_stdin(char **input) {
@@ -838,15 +875,19 @@ void read_second_part_from_stdin(char **input) {
     // no idea what is this for
     size_t size = 0;
 
+    // read line by line, push them into stack
     while (getline(&line, &size, stdin) != -1) {
         strncpy((char *) context_push(&c, strlen(line)), line, strlen(line));
     }
+
+    // free line
     free(line);
     line = NULL;
 
     size_t len = c.top;
     const char *tmp_input = context_pop(&c, len);
 
+    // malloc memory for *input and copy the input to it
     *input = (char *) malloc(len + 1);
     memcpy(*input, tmp_input, len);
     (*input)[len] = 0;

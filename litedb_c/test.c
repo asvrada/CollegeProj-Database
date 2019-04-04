@@ -316,7 +316,7 @@ static void test_parse_fourth_line() {
 }
 
 static void test_parse_queries() {
-    const char path[] = "./queries.txt";
+    const char path[] = "./test_input/queries.txt";
 
     // load content from file
     char *input;
@@ -353,7 +353,7 @@ static void test_parse_queries() {
 }
 
 void test_parse_second_part() {
-    const char path[] = "./second_part.txt";
+    const char path[] = "./test_input/second_part.txt";
 
     // load content from file
     char *input;
@@ -380,12 +380,13 @@ void test_parse_second_part() {
     EXPECT_EQ_STRING("ABCD", queries.queries[0].second.relations, strlen("ABCD"));
     EXPECT_EQ_INT(7789, queries.queries[1].fourth.predicates[0].rhs);
 
+    // clean up
     free_struct_queries(&queries);
     free(input);
 }
 
 void test_parse_second_part_from_stdin() {
-    const char path[] = "./second_part.txt";
+    const char path[] = "./test_input/second_part.txt";
     // redirect stdin
     freopen(path, "r", stdin);
 
@@ -398,13 +399,29 @@ void test_parse_second_part_from_stdin() {
 
     EXPECT_EQ_INT(3, (int) queries.length);
 
-    // check some results by hand
+    // clean up
     free_struct_queries(&queries);
     free(input);
-    input = NULL;
+}
+
+void test_parse_first_part() {
+    const char path[] = "./test_input/first_part.txt";
+    // redirect stdin
+    freopen(path, "r", stdin);
+
+    char *input = NULL;
+    read_first_part_from_stdin(&input);
+
+    printf("%s", input);
+
+    // clean up
+    free(input);
 }
 
 static void test_parse() {
+    // test parser first part
+    test_parse_first_part();
+
     // first line
     test_parse_relation_column();
 
@@ -442,13 +459,13 @@ typedef struct {
     size_t cur_size;
 } struct_fwrite_buffer;
 
-void init_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
+void init_struct_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
     buffer->buffer = malloc(max_size);
     buffer->max_size = max_size;
     buffer->cur_size = 0;
 }
 
-void free_fwrite_buffer(struct_fwrite_buffer *buffer) {
+void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
     free(buffer->buffer);
     buffer->max_size = 0;
     buffer->cur_size = 0;
@@ -489,7 +506,7 @@ void test_read_bytes() {
 
     struct_fwrite_buffer fwrite_buffer;
     // init buffer
-    init_fwrite_buffer(&fwrite_buffer, SIZE_BUFFER);
+    init_struct_fwrite_buffer(&fwrite_buffer, SIZE_BUFFER);
 
     int num_col = -1;
     int tmp_num_col = 0;
@@ -573,7 +590,7 @@ void test_read_bytes() {
 
     free(buffer);
     free(secondary_buffer);
-    free_fwrite_buffer(&fwrite_buffer);
+    free_struct_fwrite_buffer(&fwrite_buffer);
 
     fclose(file_input);
     fclose(file_binary);
