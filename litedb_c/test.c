@@ -412,7 +412,7 @@ void test_parse_first_part() {
     char *input = NULL;
     read_first_part_from_stdin(&input);
 
-    printf("%s", input);
+    EXPECT_EQ_STRING("data/xxxs/A.csv,data/xxxs/B.csv,data/xxxs/C.csv", input, strlen(input));
 
     // clean up
     free(input);
@@ -453,39 +453,6 @@ static void test_parse() {
     test_parse_second_part_from_stdin();
 }
 
-typedef struct {
-    char *buffer;
-    size_t max_size;
-    size_t cur_size;
-} struct_fwrite_buffer;
-
-void init_struct_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
-    buffer->buffer = malloc(max_size);
-    buffer->max_size = max_size;
-    buffer->cur_size = 0;
-}
-
-void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
-    free(buffer->buffer);
-    buffer->max_size = 0;
-    buffer->cur_size = 0;
-}
-
-void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, struct_fwrite_buffer *manual_buffer) {
-    size_t size_buffer = size * count;
-
-    // manual buffer is full
-    if (manual_buffer->cur_size + size_buffer >= manual_buffer->max_size) {
-        fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->cur_size, stream);
-
-        // manual buffer is now empty
-        manual_buffer->cur_size = 0;
-    }
-
-    // write into manual buffer
-    memcpy(manual_buffer->buffer + manual_buffer->cur_size, buffer, size_buffer);
-    manual_buffer->cur_size += size_buffer;
-}
 
 void test_read_bytes() {
     const int PAGE_SIZE = 4096;
@@ -586,7 +553,7 @@ void test_read_bytes() {
     }
 
     // write whats left inside output buffer to file
-    fwrite(fwrite_buffer.buffer, sizeof(*fwrite_buffer.buffer), fwrite_buffer.cur_size, file_binary);
+    fwrite_buffered_flush(&fwrite_buffer, file_binary);
 
     free(buffer);
     free(secondary_buffer);
@@ -597,6 +564,7 @@ void test_read_bytes() {
 }
 
 int main() {
+    ASSERT(1);
     test_parse();
 //    test_read_bytes();
 

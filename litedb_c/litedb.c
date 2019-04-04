@@ -11,6 +11,14 @@
 #include <assert.h>
 #include <string.h>
 
+// runtime assert
+#define ASSERT(val) \
+do {\
+    if (!(val)) {\
+        fprintf(stderr, "%s:%d: assert failed\n", __FILE__, __LINE__);\
+    }\
+} while(0)
+
 /*
  _______               __                      __                                  __
 /       \             /  |                    /  |                                /  |
@@ -21,7 +29,72 @@ $$ |  $$ | /    $$ |  $$ | __  /    $$ |      $$ |      $$ |  $$ | /    $$ |$$ |
 $$ |__$$ |/$$$$$$$ |  $$ |/  |/$$$$$$$ |      $$ |_____ $$ \__$$ |/$$$$$$$ |$$ \__$$ |$$$$$$$$/ $$ |
 $$    $$/ $$    $$ |  $$  $$/ $$    $$ |      $$       |$$    $$/ $$    $$ |$$    $$ |$$       |$$ |
 $$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$$$$$/  $$$$$$$/ $$/
+
+Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20Loader
  */
+
+/*
+ * This struct serves as a buffer when writing to disk
+ */
+typedef struct {
+    char *buffer;
+    size_t max_size;
+    size_t cur_size;
+} struct_fwrite_buffer;
+
+/**
+ * Initilize the buffer, allocate memory
+ *
+ * @param buffer
+ * @param max_size: maximum size of the buffer, in bytes
+ */
+void init_struct_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
+    buffer->buffer = malloc(max_size);
+    buffer->max_size = max_size;
+    buffer->cur_size = 0;
+}
+
+/**
+ * Free the buffer's memory
+ */
+void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
+    ASSERT(buffer != NULL);
+
+    free(buffer->buffer);
+    buffer->max_size = 0;
+    buffer->cur_size = 0;
+}
+
+/**
+ * write content to output buffer
+ * The actual file will be write if buffer is almost full
+ */
+void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, struct_fwrite_buffer *manual_buffer) {
+    // todo: page align
+    size_t size_buffer = size * count;
+
+    // manual buffer is full
+    if (manual_buffer->cur_size + size_buffer >= manual_buffer->max_size) {
+        fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->cur_size, stream);
+
+        // manual buffer is now empty
+        manual_buffer->cur_size = 0;
+    }
+
+    // write into manual buffer
+    memcpy(manual_buffer->buffer + manual_buffer->cur_size, buffer, size_buffer);
+    manual_buffer->cur_size += size_buffer;
+}
+
+/**
+ * Write whats in the buffer and empty the buffer (but not freeing the memory)
+ */
+void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
+    fwrite(manual_buffer->buffer, sizeof(*(manual_buffer->buffer)), manual_buffer->cur_size, stream);
+
+    // buffer is now empty
+    manual_buffer->cur_size = 0;
+}
 
 
 /**
@@ -29,7 +102,7 @@ $$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$
  * @param input: the pointer to the pointer to char array
  */
 void read_first_part_from_stdin(char **input) {
-    assert(input != NULL);
+    ASSERT(input != NULL);
 
     size_t size = 0;
     getline(input, &size, stdin);
@@ -51,9 +124,9 @@ $$/       $$$$$$$/ $$/       $$$$$$$/   $$$$$$$/ $$/
 #define PARSE_STACK_INIT_SIZE 256
 #endif
 
-#define EXPECT(c, ch) do { assert(c->input[0] == (ch)); } while(0)
+#define EXPECT(c, ch) do { ASSERT(c->input[0] == (ch)); } while(0)
 #define EXPECT_ALPHABET(c) do { \
-assert(('a' <= c->input[0] && c->input[0] <= 'z') || ('A' <= c->input[0] && c->input[0] <= 'Z')); } while(0)
+ASSERT(('a' <= c->input[0] && c->input[0] <= 'z') || ('A' <= c->input[0] && c->input[0] <= 'Z')); } while(0)
 
 #define IS_ALPHABET_OR_NUMERIC(ch) ((ch) >= '0' && (ch) <= '9' || (ch) >= 'a' && (ch) <= 'z' || (ch) >= 'A' && (ch) <= 'Z')
 
@@ -163,7 +236,8 @@ typedef struct {
  * must memcpy the memory because they may be occupied by future stack push
  */
 static void *context_pop(struct_parse_context *c, size_t size) {
-    assert(c->top >= size);
+    ASSERT(c->top >= size);
+
     c->top -= size;
     return c->stack + c->top;
 }
@@ -173,8 +247,9 @@ static void *context_pop(struct_parse_context *c, size_t size) {
  * return a pointer to the allocated memory where the pushed object should store
  */
 static void *context_push(struct_parse_context *c, size_t size) {
+    ASSERT(size > 0);
+
     void *ret;
-    assert(size > 0);
 
     // expand 1.5 times if smaller than whats required
     if (c->top + size >= c->size) {
@@ -201,7 +276,8 @@ static void *context_push(struct_parse_context *c, size_t size) {
 ////////////////////////////
 
 static void free_struct_relation_column(struct_relation_column *rc) {
-    assert(rc->column != NULL);
+    ASSERT(rc != NULL);
+    ASSERT(rc->column != NULL);
 
     rc->relation = '\0';
 
@@ -212,6 +288,8 @@ static void free_struct_relation_column(struct_relation_column *rc) {
 }
 
 static void free_struct_first_line(struct_first_line *fl) {
+    ASSERT(fl != NULL);
+
     for (int i = 0; i < fl->length; i++) {
         free_struct_relation_column(&fl->sums[i]);
     }
@@ -222,7 +300,7 @@ static void free_struct_first_line(struct_first_line *fl) {
 }
 
 static void free_struct_second_line(struct_second_line *sl) {
-    assert(sl->length != 0);
+    ASSERT(sl->length != 0);
 
     free(sl->relations);
     sl->relations = NULL;
@@ -230,12 +308,14 @@ static void free_struct_second_line(struct_second_line *sl) {
 }
 
 static void free_struct_join(struct_join *join) {
+    ASSERT(join != NULL);
+
     free_struct_relation_column(&join->lhs);
     free_struct_relation_column(&join->rhs);
 }
 
 static void free_struct_third_line(struct_third_line *tl) {
-    assert(tl->length != 0);
+    ASSERT(tl->length != 0);
 
     for (int i = 0; i < tl->length; i++) {
         free_struct_join(&tl->joins[i]);
@@ -247,10 +327,14 @@ static void free_struct_third_line(struct_third_line *tl) {
 }
 
 static void free_struct_predicate(struct_predicate *p) {
+    ASSERT(p != NULL);
+
     free_struct_relation_column(&p->lhs);
 }
 
 static void free_struct_fourth_line(struct_fourth_line *fl) {
+    ASSERT(fl != NULL);
+
     if (fl->length == 0) {
         return;
     }
@@ -265,6 +349,8 @@ static void free_struct_fourth_line(struct_fourth_line *fl) {
 }
 
 static void free_struct_query(struct_query *query) {
+    ASSERT(query != NULL);
+
     free_struct_first_line(&query->first);
     free_struct_second_line(&query->second);
     free_struct_third_line(&query->third);
@@ -272,7 +358,8 @@ static void free_struct_query(struct_query *query) {
 }
 
 static void free_struct_queries(struct_queries *queries) {
-    assert(queries->length != 0);
+    ASSERT(queries != NULL);
+    ASSERT(queries->length != 0);
 
     for (int i = 0; i < queries->length; i++) {
         free_struct_query(&queries->queries[i]);
@@ -290,7 +377,8 @@ static void init_struct_parse_context(struct_parse_context *c, const char *input
 }
 
 static void free_struct_parse_context(struct_parse_context *c) {
-    assert(c->top == 0);
+    ASSERT(c != NULL);
+    ASSERT(c->top == 0);
 
     free(c->stack);
     c->stack = NULL;
@@ -314,7 +402,7 @@ void parse_whitespace(struct_parse_context *c) {
  * Match string SELECT
  */
 void parse_first_line_select(struct_parse_context *c) {
-    assert(0 == strncmp(c->input, "SELECT", strlen("SELECT")));
+    ASSERT(0 == strncmp(c->input, "SELECT", strlen("SELECT")));
     c->input += strlen("SELECT");
 }
 
@@ -462,7 +550,7 @@ int parse_first_line(struct_parse_context *c, struct_first_line *v) {
  * literal FROM
  */
 void parse_second_line_from(struct_parse_context *c) {
-    assert(0 == strncmp(c->input, "FROM", strlen("FROM")));
+    ASSERT(0 == strncmp(c->input, "FROM", strlen("FROM")));
     c->input += strlen("FROM");
 }
 
@@ -541,7 +629,7 @@ int parse_second_line(struct_parse_context *c, struct_second_line *v) {
  * Match literal WHERE at the beginning of third line of SQL query
  */
 void parse_third_line_where(struct_parse_context *c) {
-    assert(0 == strncmp(c->input, "WHERE", strlen("WHERE")));
+    ASSERT(0 == strncmp(c->input, "WHERE", strlen("WHERE")));
     c->input += strlen("WHERE");
 }
 
@@ -572,7 +660,7 @@ int parse_third_line_join(struct_parse_context *c, struct_join *join) {
  * Match literal AND
  */
 void parse_and(struct_parse_context *c) {
-    assert(0 == strncmp(c->input, "AND", strlen("AND")));
+    ASSERT(0 == strncmp(c->input, "AND", strlen("AND")));
     c->input += strlen("AND");
 }
 
@@ -653,7 +741,7 @@ int parse_operator(struct_parse_context *c, enum_operator *op) {
             *op = LESS_THAN;
             break;
         default:
-            assert(0);
+            ASSERT(0);
             return PARSE_FAILED;
     }
 
@@ -765,7 +853,7 @@ int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
     int ret = parse_fourth_line_predicates(c, v);
 
     // parse ';'
-    assert(c->input[0] == ';');
+    ASSERT(c->input[0] == ';');
     c->input++;
 
     return ret;
@@ -777,7 +865,7 @@ int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
  * FirstLine Newline SecondLine Newline ThirdLine Newline FourthLine
  */
 int parse_query(struct_parse_context *c, struct_query *v) {
-    assert(c != NULL && v != NULL);
+    ASSERT(c != NULL && v != NULL);
 
     parse_first_line(c, &v->first);
     parse_whitespace(c);
@@ -839,14 +927,14 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
  * Number Newlines Queries
  */
 int parse_second_part(struct_queries *queries, const char *input) {
-    assert(queries != NULL && input != NULL);
+    ASSERT(queries != NULL && input != NULL);
 
     struct_parse_context c;
     init_struct_parse_context(&c, input);
 
     // expect number
     char head = c.input[0];
-    assert('0' <= head && head <= '9');
+    ASSERT('0' <= head && head <= '9');
 
     int count_query = 0;
     // we don't really need this number
@@ -864,7 +952,7 @@ int parse_second_part(struct_queries *queries, const char *input) {
  * @param input: pointer to a pointer to the char array. The value will be modified by this function to point to a pointer of char array created by malloc, so please free it after use.
  */
 void read_second_part_from_stdin(char **input) {
-    assert(input != NULL);
+    ASSERT(input != NULL);
 
     struct_parse_context c;
 
