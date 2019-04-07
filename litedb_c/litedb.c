@@ -19,94 +19,6 @@ do {\
     }\
 } while(0)
 
-/*
- _______               __                      __                                  __
-/       \             /  |                    /  |                                /  |
-$$$$$$$  |  ______   _$$ |_     ______        $$ |        ______    ______    ____$$ |  ______    ______
-$$ |  $$ | /      \ / $$   |   /      \       $$ |       /      \  /      \  /    $$ | /      \  /      \
-$$ |  $$ | $$$$$$  |$$$$$$/    $$$$$$  |      $$ |      /$$$$$$  | $$$$$$  |/$$$$$$$ |/$$$$$$  |/$$$$$$  |
-$$ |  $$ | /    $$ |  $$ | __  /    $$ |      $$ |      $$ |  $$ | /    $$ |$$ |  $$ |$$    $$ |$$ |  $$/
-$$ |__$$ |/$$$$$$$ |  $$ |/  |/$$$$$$$ |      $$ |_____ $$ \__$$ |/$$$$$$$ |$$ \__$$ |$$$$$$$$/ $$ |
-$$    $$/ $$    $$ |  $$  $$/ $$    $$ |      $$       |$$    $$/ $$    $$ |$$    $$ |$$       |$$ |
-$$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$$$$$/  $$$$$$$/ $$/
-
-Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20Loader
- */
-
-/*
- * This struct serves as a buffer when writing to disk
- */
-typedef struct {
-    char *buffer;
-    size_t max_size;
-    size_t cur_size;
-} struct_fwrite_buffer;
-
-/**
- * Initilize the buffer, allocate memory
- *
- * @param buffer
- * @param max_size: maximum size of the buffer, in bytes
- */
-void init_struct_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
-    buffer->buffer = malloc(max_size);
-    buffer->max_size = max_size;
-    buffer->cur_size = 0;
-}
-
-/**
- * Free the buffer's memory
- */
-void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
-    ASSERT(buffer != NULL);
-
-    free(buffer->buffer);
-    buffer->max_size = 0;
-    buffer->cur_size = 0;
-}
-
-/**
- * write content to output buffer
- * The actual file will be write if buffer is almost full
- */
-void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, struct_fwrite_buffer *manual_buffer) {
-    // todo: page align
-    size_t size_buffer = size * count;
-
-    // manual buffer is full
-    if (manual_buffer->cur_size + size_buffer >= manual_buffer->max_size) {
-        fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->cur_size, stream);
-
-        // manual buffer is now empty
-        manual_buffer->cur_size = 0;
-    }
-
-    // write into manual buffer
-    memcpy(manual_buffer->buffer + manual_buffer->cur_size, buffer, size_buffer);
-    manual_buffer->cur_size += size_buffer;
-}
-
-/**
- * Write whats in the buffer and empty the buffer (but not freeing the memory)
- */
-void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
-    fwrite(manual_buffer->buffer, sizeof(*(manual_buffer->buffer)), manual_buffer->cur_size, stream);
-
-    // buffer is now empty
-    manual_buffer->cur_size = 0;
-}
-
-
-/**
- * Read one line from stdin and assign it to *input
- * @param input: the pointer to the pointer to char array
- */
-void read_first_part_from_stdin(char **input) {
-    ASSERT(input != NULL);
-
-    size_t size = 0;
-    getline(input, &size, stdin);
-}
 
 /*
  _______
@@ -150,6 +62,14 @@ typedef enum {
 ////////////
 // struct //
 ////////////
+
+typedef struct {
+    // always inited with 26 element
+    // 2D array of path to each csv file
+    char **files;
+    // number of files that are actually there
+    size_t length;
+} struct_input_files;
 
 // SUM(D.c0)
 typedef struct {
@@ -274,6 +194,21 @@ static void *context_push(struct_parse_context *c, size_t size) {
 ////////////////////////////
 // Init & Free of structs //
 ////////////////////////////
+
+static void init_struct_input_files(struct_input_files *files) {
+    files->length = 0;
+
+    files->files = malloc(26 * sizeof(char *));
+}
+
+static void free_struct_input_files(struct_input_files *files) {
+    for (int i = 0; i < files->length; i++) {
+        free(files->files[i]);
+    }
+    free(files->files);
+    files->files = NULL;
+    files->length = 0;
+}
 
 static void free_struct_relation_column(struct_relation_column *rc) {
     ASSERT(rc != NULL);
@@ -957,6 +892,83 @@ int parse_second_part(struct_queries *queries, const char *input) {
 }
 
 /**
+ * CFG:
+ * Path
+ */
+int parse_path(struct_parse_context *c, struct_input_files *files) {
+    const char *point = c->input;
+
+    while (!(*point == 0 || *point == '\n') && *point != ',') {
+        point++;
+    }
+
+    char relation = *(point - 5);
+
+    // copy string into files
+    int length = point - c->input + 1;
+    files->files[relation - 'A'] = (char *) malloc(length * sizeof(char));
+    strncpy((files->files[relation - 'A']), c->input, length - 1);
+    files->files[relation - 'A'][length - 1] = '\0';
+
+    files->length++;
+
+    // move input forward
+    c->input = point;
+
+    return PARSE_OK;
+}
+
+/**
+ * CFG:
+ * Path | Path,WhitespacesPaths
+ */
+int parse_paths(struct_parse_context *c, struct_input_files *files) {
+    ASSERT(c->input[0] != 0);
+
+    parse_path(c, files);
+    parse_whitespace(c);
+
+    // there is more
+    while (c->input[0] == ',') {
+        // parse ,
+        c->input++;
+
+        parse_whitespace(c);
+        parse_path(c, files);
+        parse_whitespace(c);
+    }
+
+    return PARSE_OK;
+}
+
+/**
+ * Parse name of relations from input string
+ */
+int parse_first_part(struct_input_files *files, char *input) {
+    ASSERT(input != NULL);
+
+    struct_parse_context c;
+    init_struct_parse_context(&c, input);
+
+    // parse paths
+    parse_paths(&c, files);
+
+    free_struct_parse_context(&c);
+    return PARSE_OK;
+}
+
+/**
+ * Read one line from stdin and assign it to *input
+ * @param input: the pointer to the pointer to char array
+ */
+void read_first_part_from_stdin(char **input) {
+    ASSERT(input != NULL);
+
+    size_t size = 0;
+    getline(input, &size, stdin);
+}
+
+/**
  * Read string from stdin and assign the value to *input
  * @param input: pointer to a pointer to the char array. The value will be modified by this function to point to a pointer of char array created by malloc, so please free it after use.
  */
@@ -990,6 +1002,283 @@ void read_second_part_from_stdin(char **input) {
     (*input)[len] = 0;
 
     free_struct_parse_context(&c);
+}
+
+/*
+ _______               __                      __                                  __
+/       \             /  |                    /  |                                /  |
+$$$$$$$  |  ______   _$$ |_     ______        $$ |        ______    ______    ____$$ |  ______    ______
+$$ |  $$ | /      \ / $$   |   /      \       $$ |       /      \  /      \  /    $$ | /      \  /      \
+$$ |  $$ | $$$$$$  |$$$$$$/    $$$$$$  |      $$ |      /$$$$$$  | $$$$$$  |/$$$$$$$ |/$$$$$$  |/$$$$$$  |
+$$ |  $$ | /    $$ |  $$ | __  /    $$ |      $$ |      $$ |  $$ | /    $$ |$$ |  $$ |$$    $$ |$$ |  $$/
+$$ |__$$ |/$$$$$$$ |  $$ |/  |/$$$$$$$ |      $$ |_____ $$ \__$$ |/$$$$$$$ |$$ \__$$ |$$$$$$$$/ $$ |
+$$    $$/ $$    $$ |  $$  $$/ $$    $$ |      $$       |$$    $$/ $$    $$ |$$    $$ |$$       |$$ |
+$$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$$$$$/  $$$$$$$/ $$/
+
+Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20Loader
+ */
+
+#define PAGE_SIZE 4096
+#define SIZE_BUFFER 2 * PAGE_SIZE
+
+/**
+ * A struct that describe a csv file
+ */
+typedef struct {
+    // name of this file / relation
+    char relation;
+
+    // 1D int array, to keep things compact
+    int *data;
+
+    // number of column in this relation
+    int num_col;
+    int num_row;
+} struct_file;
+
+typedef struct {
+    // a dict of input files, represented in 2D array
+    // key(index): name of relation, calculated by (relation - 'A')
+    // value: pointer to struct_file
+    struct_file *files;
+    // length / number of relations
+    size_t length;
+} struct_files;
+
+/*
+ * This struct serves as a buffer when writing to disk
+ */
+typedef struct {
+    char *buffer;
+    size_t max_size;
+    size_t cur_size;
+} struct_fwrite_buffer;
+
+/////////////////
+// Init & Free //
+/////////////////
+
+void free_struct_file(struct_file *file) {
+    free(file->data);
+    file->data = NULL;
+    file->relation = 0;
+    file->num_col = 0;
+}
+
+void init_struct_files(struct_files *files, int length) {
+    files->files = malloc(length * sizeof(struct_file));
+    files->length = length;
+}
+
+void free_struct_files(struct_files *files) {
+    for (int i = 0; i < files->length; i++) {
+        free_struct_file(&files->files[i]);
+    }
+
+    free(files->files);
+    files->length = 0;
+}
+
+/**
+ * Initilize the buffer, allocate memory
+ *
+ * @param buffer
+ * @param max_size: maximum size of the buffer, in bytes
+ */
+void init_struct_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
+    buffer->buffer = malloc(max_size);
+    buffer->max_size = max_size;
+    buffer->cur_size = 0;
+}
+
+/**
+ * Free the buffer's memory
+ */
+void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
+    ASSERT(buffer != NULL);
+
+    free(buffer->buffer);
+    buffer->max_size = 0;
+    buffer->cur_size = 0;
+}
+
+/**
+ * write content to output buffer
+ * The actual file will be write if buffer is almost full
+ */
+void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, struct_fwrite_buffer *manual_buffer) {
+    // todo: page align
+    size_t size_buffer = size * count;
+
+    // manual buffer is full
+    if (manual_buffer->cur_size + size_buffer >= manual_buffer->max_size) {
+        fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->cur_size, stream);
+
+        // manual buffer is now empty
+        manual_buffer->cur_size = 0;
+    }
+
+    // write into manual buffer
+    memcpy(manual_buffer->buffer + manual_buffer->cur_size, buffer, size_buffer);
+    manual_buffer->cur_size += size_buffer;
+}
+
+/**
+ * Write whats in the buffer and empty the buffer (but not freeing the memory)
+ */
+void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
+    fwrite(manual_buffer->buffer, sizeof(*(manual_buffer->buffer)), manual_buffer->cur_size, stream);
+
+    // buffer is now empty
+    manual_buffer->cur_size = 0;
+}
+
+/**
+ * Read csv file, given the path, from disk into memory. Convert string to int then write them to disk
+ *
+ * @param relation: name of the relation
+ * @param file: path to the file on the disk
+ * @param loaded_file: struct describing the loaded file
+ */
+void load_csv_file(char relation, char *file, struct_file *loaded_file) {
+    // setup stack to store data in memory
+    struct_parse_context c;
+    // again, we only need the stack
+    init_struct_parse_context(&c, NULL);
+
+    // set name for files to write to disk
+    char path_file_binary[] = "?.binary";
+    char path_file_meta[] = "?.meta";
+    path_file_binary[0] = relation;
+    path_file_meta[0] = relation;
+
+    FILE *file_input = fopen(file, "r");
+    FILE *file_binary = fopen(path_file_binary, "wb");
+    // todo: file_meta
+
+    char *buffer = malloc(SIZE_BUFFER);
+
+    char *secondary_buffer = malloc(64);
+    // length of content stored in the buffer
+    int size_secondary_buffer = 0;
+
+    struct_fwrite_buffer fwrite_buffer;
+    // init buffer
+    init_struct_fwrite_buffer(&fwrite_buffer, SIZE_BUFFER);
+
+    int num_col = -1;
+    int tmp_num_col = 0;
+
+    while (1) {
+        size_t size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
+
+        if (size_buffer == 0) {
+            break;
+        }
+
+        int cursor = 0;
+        int cursor_prev = 0;
+
+        while (cursor < size_buffer) {
+            char current = buffer[cursor];
+
+            if (current == '\n' && num_col == -1) {
+                num_col = tmp_num_col + 1;
+            }
+
+            if (current == ',' || current == '\n') {
+                if (num_col == -1) {
+                    tmp_num_col++;
+                }
+
+                int number = 0;
+
+                if (size_secondary_buffer == 0) {
+                    // simply strtol from buffer
+                    // the number to be read will always be valid because it will end with non-numeric char
+                    number = strtol(&buffer[cursor_prev], NULL, 0);
+                } else {
+                    // this will always occur at the beginning of processing a new buffer
+                    assert(cursor_prev == 0);
+
+                    int size_tmp = size_secondary_buffer + cursor;
+                    char *tmp = malloc(size_tmp + 1);
+
+                    // copy secondary buffer to tmp buffer
+                    memcpy(tmp, secondary_buffer, size_secondary_buffer);
+                    // copy buffer to tmp buffer
+                    memcpy(tmp + size_secondary_buffer, buffer, cursor);
+                    tmp[size_tmp] = 0;
+
+                    number = strtol(tmp, NULL, 0);
+
+                    // free tmp buffer
+                    free(tmp);
+
+                    // clear secondary buffer
+                    size_secondary_buffer = 0;
+                }
+
+                // move cursor to the beginning of next number
+                cursor += 1;
+                cursor_prev = cursor;
+
+                // write number to file
+                fwrite_buffered(&number, sizeof(number), 1, file_binary, &fwrite_buffer);
+                // also write to buffer
+                *(int *) context_push(&c, sizeof(number)) = number;
+                continue;
+            }
+
+            // this current char is part of the number
+            cursor++;
+        }
+
+        // we have read the entire buffer, now copy whats left into secondary buffer
+        if (cursor_prev < size_buffer) {
+            // always happen at the end of a buffer
+            int length = size_buffer - cursor_prev;
+
+            // copy whats left of buffer into secondary buffer
+            memcpy(secondary_buffer, buffer + cursor_prev, length);
+            size_secondary_buffer = length;
+        }
+    }
+
+    // write whats left inside output buffer to file
+    fwrite_buffered_flush(&fwrite_buffer, file_binary);
+
+    // copy content in the stack to file in-memory buffer
+    loaded_file->relation = relation;
+    loaded_file->num_col = num_col;
+    size_t len = c.top;
+    loaded_file->data = malloc(len);
+    memcpy(loaded_file->data, context_pop(&c, len), len);
+    loaded_file->num_row = len / sizeof(int) / num_col;
+
+    free(buffer);
+    free(secondary_buffer);
+    free_struct_fwrite_buffer(&fwrite_buffer);
+    free_struct_parse_context(&c);
+
+    fclose(file_input);
+    fclose(file_binary);
+}
+
+/**
+ * Given the input files, load them into memory
+ * @param files
+ */
+void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) {
+    // init loaded_files
+    init_struct_files(loaded_files, path_files->length);
+
+    // read each file
+    for (int i = 0; i < path_files->length; i++) {
+        load_csv_file((char)(i + 'A'), path_files->files[i], &loaded_files->files[i]);
+    }
+
+    // don't clean struct_files
 }
 
 #endif //LITE_DB_LITEDB_C

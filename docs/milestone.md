@@ -12,7 +12,10 @@
 
 Done.
 
-Next: while reading file, store them to in memory arrays, while outputing to file.
+Next: while reading file, store them to in memory arrays, as well as outputing to file.
+
+How to handle input files:  
+Extract file name, for each file, output meta data and binary file.
 
 Also, output to file in page block?
 

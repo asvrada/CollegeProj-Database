@@ -30,7 +30,80 @@ do { \
     EXPECT_EQ_INT((int) (rc)->length_column, (int) strlen((rc)->column));\
 } while (0)
 
+//////////////////
+// Data loader //
+/////////////////
 
+static void test_load_csv_file() {
+    struct_file file;
+
+    load_csv_file('E', "/Users/zijie/IDE_Projects/DATABASE/data/xxxs/E.csv", &file);
+
+    EXPECT_EQ_INT(2, file.num_row);
+    EXPECT_EQ_INT(5, file.num_col);
+
+    EXPECT_EQ_INT(-1, file.data[0]);
+
+    free_struct_file(&file);
+}
+
+static void test_load_csv_files() {
+    const char path[] = "./test_input/first_part.txt";
+    // redirect stdin
+    freopen(path, "r", stdin);
+
+    char *input = NULL;
+    read_first_part_from_stdin(&input);
+
+    // path to files
+    struct_input_files files;
+    init_struct_input_files(&files);
+
+    // parse paths
+    parse_first_part(&files, input);
+
+    // load files
+    struct_files loaded_files;
+    load_csv_files(&files, &loaded_files);
+
+    // clean up
+    free_struct_input_files(&files);
+    free_struct_files(&loaded_files);
+    free(input);
+}
+
+
+static void test_dataloader() {
+    test_load_csv_file();
+    test_load_csv_files();
+}
+
+////////////
+// Parser //
+////////////
+
+// below are tests for first part
+static void test_parse_first_part() {
+    const char path[] = "./test_input/first_part.txt";
+    // redirect stdin
+    freopen(path, "r", stdin);
+
+    char *input = NULL;
+    read_first_part_from_stdin(&input);
+
+    struct_input_files files;
+    init_struct_input_files(&files);
+
+    parse_first_part(&files, input);
+
+    EXPECT_EQ_INT(5, (int) files.length);
+
+    // clean up
+    free_struct_input_files(&files);
+    free(input);
+}
+
+// below are test for second part
 static void test_parse_first_line() {
     struct_parse_context c;
     init_struct_parse_context(&c, "SELECT SUM(D.c0), SUM(D.c4), SUM(C.c1)\n");
@@ -352,7 +425,7 @@ static void test_parse_queries() {
     free(input);
 }
 
-void test_parse_second_part() {
+static void test_parse_second_part() {
     const char path[] = "./test_input/second_part.txt";
 
     // load content from file
@@ -388,7 +461,7 @@ void test_parse_second_part() {
     free(input);
 }
 
-void test_parse_second_part_from_stdin() {
+static void test_parse_second_part_from_stdin() {
     const char path[] = "./test_input/second_part.txt";
     // redirect stdin
     freopen(path, "r", stdin);
@@ -411,7 +484,7 @@ void test_parse_second_part_from_stdin() {
     free(input);
 }
 
-void test_parse_first_part() {
+static void test_read_first_part() {
     const char path[] = "./test_input/first_part.txt";
     // redirect stdin
     freopen(path, "r", stdin);
@@ -460,121 +533,16 @@ static void test_parse() {
     test_parse_second_part_from_stdin();
 }
 
-
+// todo: move this elsewhere
 void test_read_bytes() {
-    const int PAGE_SIZE = 4096;
-    const int SIZE_BUFFER = 2 * PAGE_SIZE;
-    const char file[] = "/Users/zijie/IDE_Projects/DATABASE/data/m/A.csv";
 
-    char path_file_binary[] = "?.binary";
-    path_file_binary[0] = file[strlen(file) - 5];
-
-    FILE *file_input = fopen(file, "r");
-    FILE *file_binary = fopen(path_file_binary, "wb");
-
-    char *buffer = malloc(SIZE_BUFFER);
-
-    char *secondary_buffer = malloc(64);
-    // length of content stored in the buffer
-    int size_secondary_buffer = 0;
-
-    struct_fwrite_buffer fwrite_buffer;
-    // init buffer
-    init_struct_fwrite_buffer(&fwrite_buffer, SIZE_BUFFER);
-
-    int num_col = -1;
-    int tmp_num_col = 0;
-
-    while (1) {
-        size_t size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
-
-        if (size_buffer == 0) {
-            break;
-        }
-
-        int cursor = 0;
-        int cursor_prev = 0;
-
-        while (cursor < size_buffer) {
-            char current = buffer[cursor];
-
-            if (current == '\n' && num_col == -1) {
-                num_col = tmp_num_col + 1;
-            }
-
-            if (current == ',' || current == '\n') {
-                if (num_col == -1) {
-                    tmp_num_col++;
-                }
-
-                int number = 0;
-
-                if (size_secondary_buffer == 0) {
-                    // simply strtol from buffer
-                    // the number to be read will always be valid because it will end with non-numeric char
-                    number = strtol(&buffer[cursor_prev], NULL, 0);
-                } else {
-                    // this will always occur at the beginning of processing a new buffer
-                    assert(cursor_prev == 0);
-
-                    int size_tmp = size_secondary_buffer + cursor;
-                    char *tmp = malloc(size_tmp + 1);
-
-                    // copy secondary buffer to tmp buffer
-                    memcpy(tmp, secondary_buffer, size_secondary_buffer);
-                    // copy buffer to tmp buffer
-                    memcpy(tmp + size_secondary_buffer, buffer, cursor);
-                    tmp[size_tmp] = 0;
-
-                    number = strtol(tmp, NULL, 0);
-
-                    // free tmp buffer
-                    free(tmp);
-
-                    // clear secondary buffer
-                    size_secondary_buffer = 0;
-                }
-
-                // move cursor to the beginning of next number
-                cursor += 1;
-                cursor_prev = cursor;
-
-                // write number to file
-                fwrite_buffered(&number, sizeof(number), 1, file_binary, &fwrite_buffer);
-                continue;
-            }
-
-            // this current char is part of the number
-            cursor++;
-        }
-
-        // we have read the entire buffer, now copy whats left into secondary buffer
-        if (cursor_prev < size_buffer) {
-            // always happen at the end of a buffer
-            int length = size_buffer - cursor_prev;
-
-            // copy whats left of buffer into secondary buffer
-            memcpy(secondary_buffer, buffer + cursor_prev, length);
-            size_secondary_buffer = length;
-        }
-    }
-
-    // write whats left inside output buffer to file
-    fwrite_buffered_flush(&fwrite_buffer, file_binary);
-
-    free(buffer);
-    free(secondary_buffer);
-    free_struct_fwrite_buffer(&fwrite_buffer);
-
-    fclose(file_input);
-    fclose(file_binary);
 }
 
 int main() {
     // test assert
     ASSERT(1);
+    test_dataloader();
     test_parse();
-//    test_read_bytes();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;
