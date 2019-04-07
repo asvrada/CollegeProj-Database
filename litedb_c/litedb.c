@@ -1041,8 +1041,8 @@ void free_struct_file(struct_file *file) {
     }
     file->data = NULL;
     file->relation = '\0';
-    file->num_col = 0;
-    file->num_row = 0;
+    file->num_col = -1;
+    file->num_row = -1;
 }
 
 void init_struct_files(struct_files *files, int length) {

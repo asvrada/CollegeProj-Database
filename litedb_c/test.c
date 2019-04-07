@@ -543,8 +543,8 @@ static void test_parse() {
     test_parse_second_part_from_stdin();
 }
 
-// test A.c0 < 777
-static void test_predicate_simple() {
+// test A.c0 = 4422
+static void test_predicate_simple_1() {
     struct_file file;
 
     load_csv_file('A', "../data/xxxs/A.csv", &file);
@@ -552,7 +552,6 @@ static void test_predicate_simple() {
     struct_predicate predicate;
 
     // A.c0 == 4422
-
     predicate.lhs.relation = 'A';
     predicate.lhs.column = 0;
 
@@ -568,12 +567,64 @@ static void test_predicate_simple() {
     free_struct_file(&file);
 }
 
+// test A.c1 > 5000
+static void test_predicate_simple_2() {
+    struct_file file;
+
+    load_csv_file('A', "../data/xxxs/A.csv", &file);
+
+    struct_predicate predicate;
+
+    predicate.lhs.relation = 'A';
+    predicate.lhs.column = 1;
+
+    predicate.operator = GREATER_THAN;
+
+    predicate.rhs = 5000;
+
+    filter_data_given_predicate(&file, &predicate);
+    EXPECT_EQ_INT(58, file.num_row);
+
+    free_struct_file(&file);
+}
+
+static void test_predicate_combined() {
+    struct_file file;
+
+    load_csv_file('A', "../data/xxxs/A.csv", &file);
+
+    struct_predicate predicate1;
+    predicate1.lhs.relation = 'A';
+    predicate1.lhs.column = 0;
+    predicate1.operator = EQUAL;
+    predicate1.rhs = 4422;
+
+    struct_predicate predicate2;
+    predicate2.lhs.relation = 'A';
+    predicate2.lhs.column = 1;
+    predicate2.operator = GREATER_THAN;
+    predicate2.rhs = 5000;
+
+    filter_data_given_predicate(&file, &predicate1);
+    filter_data_given_predicate(&file, &predicate2);
+
+    EXPECT_EQ_INT(0, file.num_row);
+
+    free_struct_file(&file);
+}
+
+static void test_predicates() {
+    test_predicate_simple_1();
+    test_predicate_simple_2();
+    test_predicate_combined();
+}
+
 int main() {
     // test assert
     ASSERT(1);
     test_dataloader();
     test_parse();
-    test_predicate_simple();
+    test_predicates();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;
