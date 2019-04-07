@@ -41,6 +41,7 @@ $$/       $$$$$$$/ $$/       $$$$$$$/   $$$$$$$/ $$/
 ASSERT(('a' <= c->input[0] && c->input[0] <= 'z') || ('A' <= c->input[0] && c->input[0] <= 'Z')); } while(0)
 
 #define IS_ALPHABET_OR_NUMERIC(ch) ((ch) >= '0' && (ch) <= '9' || (ch) >= 'a' && (ch) <= 'z' || (ch) >= 'A' && (ch) <= 'Z')
+#define IS_NUMERIC(ch) ((ch) >= '0' && (ch) <= '9')
 
 //////////
 // enum //
@@ -76,12 +77,8 @@ typedef struct {
     // single char, represents the name of relation
     char relation;
 
-    // todo: use int
-    // string, represents the name of column
-    char *column;
-
-    // length of the column string (same)
-    size_t length_column;
+    // int, represents the name of column
+    int column;
 } struct_relation_column;
 
 // SELECT SUM(D.c0), SUM(D.c4), SUM(C.c1)
@@ -213,14 +210,9 @@ static void free_struct_input_files(struct_input_files *files) {
 
 static void free_struct_relation_column(struct_relation_column *rc) {
     ASSERT(rc != NULL);
-    ASSERT(rc->column != NULL);
 
     rc->relation = '\0';
-
-    free(rc->column);
-    rc->column = NULL;
-
-    rc->length_column = 0;
+    rc->column = -1;
 }
 
 static void free_struct_first_line(struct_first_line *fl) {
@@ -379,21 +371,30 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
     c->input++;
 
     // parse column
+    // parse letter c at the beginning of column
+    c->input++;
+
     head = c->top;
     tmp_p = c->input;
 
     while (1) {
         char ch = tmp_p[0];
 
-        // end of column
-        if (!IS_ALPHABET_OR_NUMERIC(ch)) {
+        // todo: end of column
+        if (!IS_NUMERIC(ch)) {
             size_t len = c->top - head;
+            // string of number, no terminal
             const char *str = context_pop(c, len);
-            // copy string
-            relation_column->column = (char *) malloc(len + 1);
-            memcpy(relation_column->column, str, len);
-            relation_column->column[len] = '\0';
-            relation_column->length_column = len;
+
+            char *tmp_str = (char*)malloc(len + 1);
+            memcpy(tmp_str, str, len);
+            tmp_str[len] = '\0';
+
+            // parse int
+            relation_column->column = strtol(tmp_str, NULL, 0);
+
+            // clean up
+            free(tmp_str);
 
             c->input = tmp_p;
             break;
