@@ -1251,6 +1251,7 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
 
         // also empty the data frame
         free_struct_data_frame(file->df);
+        free(file->df);
         file->df = NULL;
     } else {
         // realloc memory for df->index
