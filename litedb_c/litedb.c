@@ -999,6 +999,15 @@ Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20
 #define SIZE_BUFFER 2 * PAGE_SIZE
 
 /**
+ * struct that stores intermediate table (after join, after predicates)
+ */
+typedef struct {
+    char *relations;
+    int *index;
+    int num_row;
+} struct_data_frame;
+
+/**
  * A struct that describe a csv file
  */
 typedef struct {
@@ -1011,6 +1020,9 @@ typedef struct {
     // number of column in this relation
     int num_col;
     int num_row;
+
+    // if there is predicates on this relation, then df will not be null
+    struct_data_frame *df;
 } struct_file;
 
 typedef struct {
@@ -1035,6 +1047,27 @@ typedef struct {
 // Init & Free //
 /////////////////
 
+void free_struct_data_frame(struct_data_frame *df) {
+    if (df == NULL) {
+        return;
+    }
+
+    free(df->relations);
+    free(df->index);
+
+    df->relations = NULL;
+    df->index = NULL;
+    df->num_row = 0;
+}
+
+void init_struct_file(struct_file *file) {
+    file->relation = '\0';
+    file->data = NULL;
+    file->num_col = -1;
+    file->num_row = -1;
+    file->df = NULL;
+}
+
 void free_struct_file(struct_file *file) {
     if (file->data != NULL) {
         free(file->data);
@@ -1043,11 +1076,21 @@ void free_struct_file(struct_file *file) {
     file->relation = '\0';
     file->num_col = -1;
     file->num_row = -1;
+
+    if (file->df != NULL) {
+        free_struct_data_frame(file->df);
+        file->df = NULL;
+    }
 }
 
 void init_struct_files(struct_files *files, int length) {
     files->files = malloc(length * sizeof(struct_file));
     files->length = length;
+
+    for (int i = 0; i < length; i++) {
+        init_struct_file(&files->files[i]);
+    }
+
 }
 
 void free_struct_files(struct_files *files) {
@@ -1113,31 +1156,57 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
 
 /**
  * Filter data in the relation, given predicate like A.c3 < 7666
+ * And create filered index for input file
+ *
  * @param file
  * @param predicate
  */
 void filter_data_given_predicate(struct_file *file, struct_predicate *predicate) {
     ASSERT(file->relation == predicate->lhs.relation);
 
-    const int col = file->num_col;
-    const int row = file->num_row;
-    // size of each row, in bytes
-    const size_t size_row = col * sizeof(file->data[0]);
+    // empty file, do nothing
+    if (file->num_row == 0) {
+        return;
+    }
 
-    // pointer to row, in int
+    // if dataframe is NULL, create dataframe
+    if (file->df == NULL) {
+        file->df = (struct_data_frame *) malloc(sizeof(struct_data_frame));
+
+        file->df->relations = (char *) malloc(2 * sizeof(char));
+        file->df->relations[0] = file->relation;
+        file->df->relations[1] = '\0';
+
+        // init index with index[i] = i where i = 0...number of rows
+        // size = number of rows
+        file->df->index = (int *) malloc(file->num_row * sizeof(int));
+        file->df->num_row = file->num_row;
+
+        for (int i = 0; i < file->df->num_row; i++) {
+            file->df->index[i] = i;
+        }
+    }
+
+    struct_data_frame *const df = file->df;
+    const int row = file->df->num_row;
+    const int col = file->num_col;
+
+    // pointer to file->df->index
     size_t slow = 0;
-    // pointer to row, in int
+    // pointer to file->df->index
     size_t fast = 0;
 
+    // index of column
     int column = predicate->lhs.column;
+    // the number @ given column
     int number = 0;
     int shouldKeep = 0;
 
     // for each row
-    for (; fast < row * col; fast += col) {
+    for (; fast < row; fast++) {
         shouldKeep = 0;
         // check predicate
-        number = file->data[fast + column];
+        number = file->data[df->index[fast] * col + column];
 
         switch (predicate->operator) {
             case EQUAL:
@@ -1165,21 +1234,26 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
             continue;
         }
 
-        // copy row
-        memcpy(file->data + slow, file->data + fast, size_row);
-        slow += col;
+        // copy index of row
+        df->index[slow] = fast;
+        slow++;
     }
 
-    // update size of file
-    file->num_row = slow / col;
+    // update row of df
+    df->num_row = slow;
 
     // if no rows selected, empty the relation
-    if (file->num_row == 0) {
+    if (df->num_row == 0) {
         free(file->data);
         file->data = NULL;
+        file->num_row = 0;
+
+        // also empty the data frame
+        free_struct_data_frame(file->df);
+        file->df = NULL;
     } else {
-        // realloc memory
-        file->data = realloc(file->data, file->num_row * file->num_col * sizeof(file->data[0]));
+        // realloc memory for df->index
+        df->index = (int *) realloc(df->index, df->num_row * sizeof(int));
     }
 }
 

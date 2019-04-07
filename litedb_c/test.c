@@ -35,6 +35,7 @@ do { \
 
 static void test_load_csv_file() {
     struct_file file;
+    init_struct_file(&file);
 
     load_csv_file('E', "../data/xxxs/E.csv", &file);
 
@@ -48,6 +49,7 @@ static void test_load_csv_file() {
 
 static void test_load_csv_file_l() {
     struct_file file;
+    init_struct_file(&file);
 
     load_csv_file('E', "../data/l/A.csv", &file);
 
@@ -546,6 +548,7 @@ static void test_parse() {
 // test A.c0 = 4422
 static void test_predicate_simple_1() {
     struct_file file;
+    init_struct_file(&file);
 
     load_csv_file('A', "../data/xxxs/A.csv", &file);
 
@@ -561,8 +564,10 @@ static void test_predicate_simple_1() {
 
     filter_data_given_predicate(&file, &predicate);
 
-    EXPECT_EQ_INT(4422, file.data[0]);
-    EXPECT_EQ_INT(1, file.num_row);
+    EXPECT_EQ_INT(100, file.num_row);
+    EXPECT_EQ_INT(10, file.num_col);
+    EXPECT_EQ_INT(1, file.df->num_row);
+    EXPECT_EQ_INT(18, file.df->index[0]);
 
     free_struct_file(&file);
 }
@@ -570,6 +575,7 @@ static void test_predicate_simple_1() {
 // test A.c1 > 5000
 static void test_predicate_simple_2() {
     struct_file file;
+    init_struct_file(&file);
 
     load_csv_file('A', "../data/xxxs/A.csv", &file);
 
@@ -577,19 +583,20 @@ static void test_predicate_simple_2() {
 
     predicate.lhs.relation = 'A';
     predicate.lhs.column = 1;
-
     predicate.operator = GREATER_THAN;
-
     predicate.rhs = 5000;
 
     filter_data_given_predicate(&file, &predicate);
-    EXPECT_EQ_INT(58, file.num_row);
+    EXPECT_EQ_INT(100, file.num_row);
+    EXPECT_EQ_INT(10, file.num_col);
+    EXPECT_EQ_INT(58, file.df->num_row);
 
     free_struct_file(&file);
 }
 
 static void test_predicate_combined() {
     struct_file file;
+    init_struct_file(&file);
 
     load_csv_file('A', "../data/xxxs/A.csv", &file);
 
@@ -606,6 +613,9 @@ static void test_predicate_combined() {
     predicate2.rhs = 5000;
 
     filter_data_given_predicate(&file, &predicate1);
+    filter_data_given_predicate(&file, &predicate2);
+
+    // what if we select from already empty file?
     filter_data_given_predicate(&file, &predicate2);
 
     EXPECT_EQ_INT(0, file.num_row);
