@@ -549,6 +549,22 @@ static void test_predicate_simple() {
 
     load_csv_file('A', "../data/xxxs/A.csv", &file);
 
+    struct_predicate predicate;
+
+    // A.c0 == 4422
+
+    predicate.lhs.relation = 'A';
+    predicate.lhs.column = 0;
+
+    predicate.operator = EQUAL;
+
+    predicate.rhs = 4422;
+
+    filter_data_given_predicate(&file, &predicate);
+
+    EXPECT_EQ_INT(4422, file.data[0]);
+    EXPECT_EQ_INT(1, file.num_row);
+
     free_struct_file(&file);
 }
 

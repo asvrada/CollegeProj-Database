@@ -209,15 +209,10 @@ static void free_struct_input_files(struct_input_files *files) {
 }
 
 static void free_struct_relation_column(struct_relation_column *rc) {
-    ASSERT(rc != NULL);
-
-    rc->relation = '\0';
-    rc->column = -1;
+    // we do not malloc here, so nothing to free
 }
 
 static void free_struct_first_line(struct_first_line *fl) {
-    ASSERT(fl != NULL);
-
     for (int i = 0; i < fl->length; i++) {
         free_struct_relation_column(&fl->sums[i]);
     }
@@ -228,23 +223,17 @@ static void free_struct_first_line(struct_first_line *fl) {
 }
 
 static void free_struct_second_line(struct_second_line *sl) {
-    ASSERT(sl->length != 0);
-
     free(sl->relations);
     sl->relations = NULL;
     sl->length = 0;
 }
 
 static void free_struct_join(struct_join *join) {
-    ASSERT(join != NULL);
-
     free_struct_relation_column(&join->lhs);
     free_struct_relation_column(&join->rhs);
 }
 
 static void free_struct_third_line(struct_third_line *tl) {
-    ASSERT(tl->length != 0);
-
     for (int i = 0; i < tl->length; i++) {
         free_struct_join(&tl->joins[i]);
     }
@@ -255,14 +244,10 @@ static void free_struct_third_line(struct_third_line *tl) {
 }
 
 static void free_struct_predicate(struct_predicate *p) {
-    ASSERT(p != NULL);
-
-    free_struct_relation_column(&p->lhs);
+    // nothing to free
 }
 
 static void free_struct_fourth_line(struct_fourth_line *fl) {
-    ASSERT(fl != NULL);
-
     // this line may be empty
     if (fl->length == 0) {
         return;
@@ -278,8 +263,6 @@ static void free_struct_fourth_line(struct_fourth_line *fl) {
 }
 
 static void free_struct_query(struct_query *query) {
-    ASSERT(query != NULL);
-
     free_struct_first_line(&query->first);
     free_struct_second_line(&query->second);
     free_struct_third_line(&query->third);
@@ -287,9 +270,6 @@ static void free_struct_query(struct_query *query) {
 }
 
 static void free_struct_queries(struct_queries *queries) {
-    ASSERT(queries != NULL);
-    ASSERT(queries->length != 0);
-
     for (int i = 0; i < queries->length; i++) {
         free_struct_query(&queries->queries[i]);
     }
@@ -306,9 +286,6 @@ static void init_struct_parse_context(struct_parse_context *c, const char *input
 }
 
 static void free_struct_parse_context(struct_parse_context *c) {
-    ASSERT(c != NULL);
-    ASSERT(c->top == 0);
-
     free(c->stack);
     c->stack = NULL;
     c->top = c->size = 0;
@@ -386,7 +363,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
             // string of number, no terminal
             const char *str = context_pop(c, len);
 
-            char *tmp_str = (char*)malloc(len + 1);
+            char *tmp_str = (char *) malloc(len + 1);
             memcpy(tmp_str, str, len);
             tmp_str[len] = '\0';
 
@@ -811,8 +788,6 @@ int parse_fourth_line(struct_parse_context *c, struct_fourth_line *v) {
  * FirstLine Newline SecondLine Newline ThirdLine Newline FourthLine
  */
 int parse_query(struct_parse_context *c, struct_query *v) {
-    ASSERT(c != NULL && v != NULL);
-
     parse_first_line(c, &v->first);
     parse_whitespace(c);
     parse_second_line(c, &v->second);
@@ -1061,10 +1036,13 @@ typedef struct {
 /////////////////
 
 void free_struct_file(struct_file *file) {
-    free(file->data);
+    if (file->data != NULL) {
+        free(file->data);
+    }
     file->data = NULL;
-    file->relation = 0;
+    file->relation = '\0';
     file->num_col = 0;
+    file->num_row = 0;
 }
 
 void init_struct_files(struct_files *files, int length) {
@@ -1097,8 +1075,6 @@ void init_struct_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
  * Free the buffer's memory
  */
 void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
-    ASSERT(buffer != NULL);
-
     free(buffer->buffer);
     buffer->max_size = 0;
     buffer->cur_size = 0;
@@ -1148,15 +1124,62 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
     // size of each row, in bytes
     const size_t size_row = col * sizeof(file->data[0]);
 
-    // pointer to row
+    // pointer to row, in int
     size_t slow = 0;
-    // pointer to row
+    // pointer to row, in int
     size_t fast = 0;
 
+    int column = predicate->lhs.column;
+    int number = 0;
+    int shouldKeep = 0;
+
     // for each row
-    for (; fast < size_row * row; fast += size_row) {
+    for (; fast < row * col; fast += col) {
+        shouldKeep = 0;
         // check predicate
+        number = file->data[fast + column];
+
+        switch (predicate->operator) {
+            case EQUAL:
+                if (number == predicate->rhs) {
+                    shouldKeep = 1;
+                }
+                break;
+            case LESS_THAN:
+                if (number < predicate->rhs) {
+                    shouldKeep = 1;
+                }
+                break;
+            case GREATER_THAN:
+                if (number > predicate->rhs) {
+                    shouldKeep = 1;
+                }
+                break;
+            default:
+                fprintf(stderr, "Invalid operator");
+                break;
+        }
+
         // if met, copy row @ fast to row @ slow, slow++
+        if (shouldKeep == 0) {
+            continue;
+        }
+
+        // copy row
+        memcpy(file->data + slow, file->data + fast, size_row);
+        slow += col;
+    }
+
+    // update size of file
+    file->num_row = slow / col;
+
+    // if no rows selected, empty the relation
+    if (file->num_row == 0) {
+        free(file->data);
+        file->data = NULL;
+    } else {
+        // realloc memory
+        file->data = realloc(file->data, file->num_row * file->num_col * sizeof(file->data[0]));
     }
 }
 
@@ -1305,7 +1328,7 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
         load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
     }
 
-    // don't clean struct_files
+    // don't free struct_files
 }
 
 #endif //LITE_DB_LITEDB_C
