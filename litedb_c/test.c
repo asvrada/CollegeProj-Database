@@ -557,9 +557,7 @@ static void test_predicate_simple_1() {
     // A.c0 == 4422
     predicate.lhs.relation = 'A';
     predicate.lhs.column = 0;
-
     predicate.operator = EQUAL;
-
     predicate.rhs = 4422;
 
     filter_data_given_predicate(&file, &predicate);

@@ -1063,8 +1063,8 @@ void free_struct_data_frame(struct_data_frame *df) {
 void init_struct_file(struct_file *file) {
     file->relation = '\0';
     file->data = NULL;
-    file->num_col = -1;
-    file->num_row = -1;
+    file->num_col = 0;
+    file->num_row = 0;
     file->df = NULL;
 }
 
@@ -1074,11 +1074,12 @@ void free_struct_file(struct_file *file) {
     }
     file->data = NULL;
     file->relation = '\0';
-    file->num_col = -1;
-    file->num_row = -1;
+    file->num_col = 0;
+    file->num_row = 0;
 
     if (file->df != NULL) {
         free_struct_data_frame(file->df);
+        free(file->df);
         file->df = NULL;
     }
 }
