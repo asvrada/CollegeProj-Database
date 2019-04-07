@@ -621,10 +621,33 @@ static void test_predicate_combined() {
     free_struct_file(&file);
 }
 
+static void test_predicate_m_1() {
+    struct_file file;
+    init_struct_file(&file);
+
+    load_csv_file('A', "../data/m/A.csv", &file);
+
+    struct_predicate predicate;
+
+    predicate.lhs.relation = 'A';
+    predicate.lhs.column = 1;
+    predicate.operator = GREATER_THAN;
+    predicate.rhs = 5000;
+
+    filter_data_given_predicate(&file, &predicate);
+    EXPECT_EQ_INT(1000000, file.num_row);
+    EXPECT_EQ_INT(50, file.num_col);
+    EXPECT_EQ_INT(434960, file.df->num_row);
+
+    free_struct_file(&file);
+}
+
 static void test_predicates() {
     test_predicate_simple_1();
     test_predicate_simple_2();
     test_predicate_combined();
+
+    test_predicate_m_1();
 }
 
 int main() {
