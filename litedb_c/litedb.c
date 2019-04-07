@@ -76,6 +76,7 @@ typedef struct {
     // single char, represents the name of relation
     char relation;
 
+    // todo: use int
     // string, represents the name of column
     char *column;
 
@@ -1134,6 +1135,31 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
 }
 
 /**
+ * Filter data in the relation, given predicate like A.c3 < 7666
+ * @param file
+ * @param predicate
+ */
+void filter_data_given_predicate(struct_file *file, struct_predicate *predicate) {
+    ASSERT(file->relation == predicate->lhs.relation);
+
+    const int col = file->num_col;
+    const int row = file->num_row;
+    // size of each row, in bytes
+    const size_t size_row = col * sizeof(file->data[0]);
+
+    // pointer to row
+    size_t slow = 0;
+    // pointer to row
+    size_t fast = 0;
+
+    // for each row
+    for (; fast < size_row * row; fast += size_row) {
+        // check predicate
+        // if met, copy row @ fast to row @ slow, slow++
+    }
+}
+
+/**
  * Read csv file, given the path, from disk into memory. Convert string to int then write them to disk
  *
  * @param relation: name of the relation
@@ -1275,7 +1301,7 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
 
     // read each file
     for (int i = 0; i < path_files->length; i++) {
-        load_csv_file((char)(i + 'A'), path_files->files[i], &loaded_files->files[i]);
+        load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
     }
 
     // don't clean struct_files

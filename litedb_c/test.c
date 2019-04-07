@@ -37,7 +37,7 @@ do { \
 static void test_load_csv_file() {
     struct_file file;
 
-    load_csv_file('E', "/Users/zijie/IDE_Projects/DATABASE/data/xxxs/E.csv", &file);
+    load_csv_file('E', "../data/xxxs/E.csv", &file);
 
     EXPECT_EQ_INT(2, file.num_row);
     EXPECT_EQ_INT(5, file.num_col);
@@ -47,8 +47,17 @@ static void test_load_csv_file() {
     free_struct_file(&file);
 }
 
-static void test_load_csv_files() {
-    const char path[] = "./test_input/first_part.txt";
+static void test_load_csv_file_l() {
+    struct_file file;
+
+    load_csv_file('E', "../data/l/A.csv", &file);
+
+    EXPECT_EQ_INT(10000000, file.num_row);
+
+    free_struct_file(&file);
+}
+
+static void test_load_csv_files(const char* path) {
     // redirect stdin
     freopen(path, "r", stdin);
 
@@ -75,7 +84,9 @@ static void test_load_csv_files() {
 
 static void test_dataloader() {
     test_load_csv_file();
-    test_load_csv_files();
+//    test_load_csv_file_l();
+    test_load_csv_files("./test_input/first_part_xxxs.txt");
+//    test_load_csv_files("./test_input/first_part_m.txt");
 }
 
 ////////////
@@ -84,7 +95,7 @@ static void test_dataloader() {
 
 // below are tests for first part
 static void test_parse_first_part() {
-    const char path[] = "./test_input/first_part.txt";
+    const char path[] = "./test_input/first_part_xxxs.txt";
     // redirect stdin
     freopen(path, "r", stdin);
 
@@ -485,7 +496,7 @@ static void test_parse_second_part_from_stdin() {
 }
 
 static void test_read_first_part() {
-    const char path[] = "./test_input/first_part.txt";
+    const char path[] = "./test_input/first_part_xxxs.txt";
     // redirect stdin
     freopen(path, "r", stdin);
 
@@ -533,9 +544,13 @@ static void test_parse() {
     test_parse_second_part_from_stdin();
 }
 
-// todo: move this elsewhere
-void test_read_bytes() {
+// test A.c0 < 777
+static void test_predicate_simple() {
+    struct_file file;
 
+    load_csv_file('A', "../data/xxxs/A.csv", &file);
+
+    free_struct_file(&file);
 }
 
 int main() {
@@ -543,6 +558,7 @@ int main() {
     ASSERT(1);
     test_dataloader();
     test_parse();
+    test_predicate_simple();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;
