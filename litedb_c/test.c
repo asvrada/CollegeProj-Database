@@ -93,6 +93,7 @@ static void test_dataloader() {
 // Parser //
 ////////////
 
+#if 0
 // below are tests for first part
 static void test_parse_first_part() {
     const char path[] = "./test_input/first_part_xxxs.txt";
@@ -653,6 +654,8 @@ static void test_predicates() {
 static void test_join() {
 
 }
+
+#endif
 
 int main() {
     // test assert
