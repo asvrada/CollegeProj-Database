@@ -1187,7 +1187,8 @@ void free_struct_files(struct_files *files) {
  * @param max_size: maximum size of the buffer, in bytes
  */
 void init_struct_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
-    buffer->buffer = malloc(max_size);
+    buffer->buffer = (char *) malloc(max_size);
+    memset(buffer->buffer, 0, max_size);
     buffer->max_size = max_size;
     buffer->cur_size = 0;
 }
@@ -1197,6 +1198,7 @@ void init_struct_fwrite_buffer(struct_fwrite_buffer *buffer, size_t max_size) {
  */
 void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
     free(buffer->buffer);
+    buffer->buffer = NULL;
     buffer->max_size = 0;
     buffer->cur_size = 0;
 }
@@ -1231,7 +1233,7 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
     }
 
     // write entire buffer into disk, so it's page aligned
-    fwrite(manual_buffer->buffer, sizeof(*(manual_buffer->buffer)), manual_buffer->max_size, stream);
+    fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->max_size, stream);
 
     // buffer is now empty
     manual_buffer->cur_size = 0;
@@ -1371,8 +1373,8 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     // FILE *file_meta
 
     // main buffer to read char from file
-    char *buffer = malloc(SIZE_BUFFER);
-    char *secondary_buffer = malloc(64);
+    char *buffer = (char *) malloc(SIZE_BUFFER);
+    char *secondary_buffer = (char *) malloc(64);
     // length of content stored in the buffer
     int size_secondary_buffer = 0;
 
@@ -1505,8 +1507,12 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
         }
     }
 
+    assert(size_buffer_row == 0);
+
     // write whats left inside output buffer to file
-    fwrite_buffered_flush(&fwrite_buffer, file_binary);
+    if (fwrite_buffer.cur_size != 0) {
+        fwrite_buffered_flush(&fwrite_buffer, file_binary);
+    }
 
     loaded_file->relation = relation;
     loaded_file->num_col = num_col;
