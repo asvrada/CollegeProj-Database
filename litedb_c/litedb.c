@@ -197,6 +197,9 @@ static void init_struct_input_files(struct_input_files *files) {
     files->length = 0;
 
     files->files = malloc(26 * sizeof(char *));
+    for (int i = 0; i < 26; i++) {
+        files->files[i] = NULL:
+    }
 }
 
 static void free_struct_input_files(struct_input_files *files) {
