@@ -198,7 +198,7 @@ static void init_struct_input_files(struct_input_files *files) {
 
     files->files = malloc(26 * sizeof(char *));
     for (int i = 0; i < 26; i++) {
-        files->files[i] = NULL:
+        files->files[i] = NULL;
     }
 }
 
@@ -1003,28 +1003,99 @@ Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20
 
 /**
  * struct that stores intermediate table (after join, after predicates)
+ *
+ * It stores the name of relations that it represents
+ * And list of index to rows in these relations
  */
 typedef struct {
+    /**
+     * A 1D array of chars, they are relations that this struct represents
+     */
     char *relations;
+
+    /**
+     * A 1D array of int, they are index to the rows of above relations
+     *
+     * The layout is something like:
+     * 0 1 0 2 1 1
+     *
+     * AB
+     * [01] [02] [11]
+     *
+     * Which means:
+     *     the first row of this df is comprised of row 0 from A and row 1 from B.
+     *     the second row of this df is comprised of row 0 from A and row 2 from B.
+     *     and so on
+     */
     int *index;
+
+    /**
+     * Number of rows in index
+     *
+     * num_row = len(index) / len(relations)
+     */
     int num_row;
 } struct_data_frame;
 
+// todo: I need some function to read pages from binary file, given index to rows I want from original file
+
 /**
- * A struct that describe a csv file
+ *
+ */
+typedef struct {
+    /**
+     * @nullable
+     */
+    FILE *file_binary;
+
+    // todo: some sort of buffer of pages
+    // inclusive
+    int row_start;
+    // exclusive
+    int row_end;
+} struct_file_binary;
+
+/**
+ * todo: should always stay in memory?
+ */
+typedef struct {
+    /**
+     * @nullable
+     */
+    FILE *file_meta;
+} struct_file_meta;
+
+/**
+ * A struct that describe a relation
  */
 typedef struct {
     // name of this file / relation
     char relation;
 
-    // 1D int array, to keep things compact
-    int *data;
+    // this value will be whatever the first path of the program recevies
+    // relative or absolute path to the file on disk
+    // once initilized, should not change
+    char *path;
 
-    // number of column in this relation
+    /**
+     * The struct to the .binary file
+     */
+//    struct_file_binary file_binary;
+
+    /**
+     * The struct to the .meta file
+     */
+//    struct_file_meta file_meta;
+
+    // todo: move them into metadata
+    // number of column and rows in the relation
     int num_col;
     int num_row;
 
-    // if there is predicates on this relation, then df will not be null
+    /**
+     * This struct stores index of valid rows (for example, after select/filter) of the original relation
+     * @nullable: if there is no predicate on this relation, or after filter, the relation is empty, then df will be NULL
+     */
     struct_data_frame *df;
 } struct_file;
 
@@ -1065,18 +1136,20 @@ void free_struct_data_frame(struct_data_frame *df) {
 
 void init_struct_file(struct_file *file) {
     file->relation = '\0';
-    file->data = NULL;
+    file->path = NULL;
     file->num_col = 0;
     file->num_row = 0;
     file->df = NULL;
 }
 
 void free_struct_file(struct_file *file) {
-    if (file->data != NULL) {
-        free(file->data);
-    }
-    file->data = NULL;
     file->relation = '\0';
+
+    if (file->path != NULL) {
+        free(file->path);
+        file->path = NULL;
+    }
+
     file->num_col = 0;
     file->num_row = 0;
 
@@ -1132,7 +1205,7 @@ void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
  * The actual file will be write if buffer is almost full
  */
 void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, struct_fwrite_buffer *manual_buffer) {
-    // todo: page align
+    // todo: page align with rows
     size_t size_buffer = size * count;
 
     // manual buffer is full
@@ -1165,6 +1238,8 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
  * @param file
  * @param predicate
  */
+// todo: enable this
+#if 0
 void filter_data_given_predicate(struct_file *file, struct_predicate *predicate) {
     ASSERT(file->relation == predicate->lhs.relation);
 
@@ -1261,32 +1336,37 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
         df->index = (int *) realloc(df->index, df->num_row * sizeof(int));
     }
 }
+#endif
 
 /**
- * Read csv file, given the path, from disk into memory. Convert string to int then write them to disk
+ * Read csv file from disk and convert them into a more efficient format, then write back to disk
+ *
+ * What does it do:
+ * Read contents from csv file, convert string of number into signed 32 bit representation and write (x.binary) back to disk
+ *
+ * Also, gather metadata about each file:
+ * For each column: min value, max value, number of unique value
  *
  * @param relation: name of the relation
  * @param file: path to the file on the disk
  * @param loaded_file: struct describing the loaded file
  */
+// todo: count number of rows, and write rows in a page aligned manner
 void load_csv_file(char relation, char *file, struct_file *loaded_file) {
-    // setup stack to store data in memory
-    struct_parse_context c;
-    // again, we only need the stack
-    init_struct_parse_context(&c, NULL);
-
     // set name for files to write to disk
     char path_file_binary[] = "?.binary";
     char path_file_meta[] = "?.meta";
     path_file_binary[0] = relation;
     path_file_meta[0] = relation;
 
+    // freed at the end of this function
     FILE *file_input = fopen(file, "r");
     FILE *file_binary = fopen(path_file_binary, "wb");
     // todo: file_meta
+    // FILE *file_meta
 
+    // main buffer to read char from file
     char *buffer = malloc(SIZE_BUFFER);
-
     char *secondary_buffer = malloc(64);
     // length of content stored in the buffer
     int size_secondary_buffer = 0;
@@ -1295,9 +1375,22 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     // init buffer
     init_struct_fwrite_buffer(&fwrite_buffer, SIZE_BUFFER);
 
+    int num_row = 0;
     int num_col = -1;
     int tmp_num_col = 0;
 
+    // we use the stack to store the first line of csv file, because we don't know the number of column
+    // freed after processing the first line of csv file
+    struct_parse_context c;
+    init_struct_parse_context(&c, NULL);
+
+    // buffer for storing numbers in the same row
+    int *buffer_row = NULL;
+    // number of int currently stored, if == num_col, write the buffer_row to output buffer and empty buffer
+    int size_buffer_row = 0;
+
+    // tmp variables used inside loop
+    // todo: current, number, cursor, cursor_prev
     while (1) {
         size_t size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
 
@@ -1311,13 +1404,34 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
         while (cursor < size_buffer) {
             char current = buffer[cursor];
 
-            if (current == '\n' && num_col == -1) {
-                num_col = tmp_num_col + 1;
-            }
-
+            // if its end of number
             if (current == ',' || current == '\n') {
                 if (num_col == -1) {
                     tmp_num_col++;
+
+                    // This is the end of first line
+                    // We do:
+                    // 1. assign num_col
+                    // 2. create row buffer
+                    // 3. move content inside stack into row buffer
+                    if (current == '\n') {
+                        // 1. assign num_col
+                        num_col = tmp_num_col;
+
+                        // 2. create row buffer
+                        // find out size of stack, plus one because the last number is not pushed into the stack
+                        size_t top = c.top;
+                        size_t num_bytes_buffer_row = num_col * sizeof(int);
+                        // freed at the end of this function
+                        buffer_row = (int *) malloc(num_bytes_buffer_row);
+
+                        // 3. move content inside stack into row buffer
+                        // copy content from stack into buffer row
+                        memcpy(buffer_row, context_pop(&c, top), top);
+                        size_buffer_row = top / sizeof(int);
+                        // free stack
+                        free_struct_parse_context(&c);
+                    }
                 }
 
                 int number = 0;
@@ -1352,18 +1466,31 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
                 cursor += 1;
                 cursor_prev = cursor;
 
-                // write number to file
-                fwrite_buffered(&number, sizeof(number), 1, file_binary, &fwrite_buffer);
-                // also write to buffer
-                *(int *) context_push(&c, sizeof(number)) = number;
+                // if still processing first line, output number to stack
+                if (num_col == -1) {
+                    *(int *) context_push(&c, sizeof(number)) = number;
+                } else {
+                    // write number to buffer row
+                    buffer_row[size_buffer_row] = number;
+                    size_buffer_row++;
+                }
+
+                // if buffer row is full, write to output buffer, and empty it
+                // this also means row++
+                if (size_buffer_row == num_col) {
+                    fwrite_buffered(buffer_row, sizeof(buffer_row[0]), size_buffer_row, file_binary, &fwrite_buffer);
+                    size_buffer_row = 0;
+                    num_row++;
+                }
                 continue;
             }
 
-            // this current char is part of the number
+            // this current char is part of the number, skip it
             cursor++;
         }
 
         // we have read the entire buffer, now copy whats left into secondary buffer
+        // only if there is anything left in the main buffer
         if (cursor_prev < size_buffer) {
             // always happen at the end of a buffer
             int length = size_buffer - cursor_prev;
@@ -1377,18 +1504,14 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     // write whats left inside output buffer to file
     fwrite_buffered_flush(&fwrite_buffer, file_binary);
 
-    // copy content in the stack to file in-memory buffer
     loaded_file->relation = relation;
     loaded_file->num_col = num_col;
-    size_t len = c.top;
-    loaded_file->data = malloc(len);
-    memcpy(loaded_file->data, context_pop(&c, len), len);
-    loaded_file->num_row = len / sizeof(int) / num_col;
+    loaded_file->num_row = num_row;
 
     free(buffer);
     free(secondary_buffer);
+    free(buffer_row);
     free_struct_fwrite_buffer(&fwrite_buffer);
-    free_struct_parse_context(&c);
 
     fclose(file_input);
     fclose(file_binary);

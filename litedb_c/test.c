@@ -42,8 +42,6 @@ static void test_load_csv_file() {
     EXPECT_EQ_INT(2, file.num_row);
     EXPECT_EQ_INT(5, file.num_col);
 
-    EXPECT_EQ_INT(-1, file.data[0]);
-
     free_struct_file(&file);
 }
 
@@ -51,9 +49,10 @@ static void test_load_csv_file_l() {
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file('E', "../data/l/A.csv", &file);
+    load_csv_file('A', "../data/l/A.csv", &file);
 
     EXPECT_EQ_INT(10000000, file.num_row);
+    EXPECT_EQ_INT(50, file.num_col);
 
     free_struct_file(&file);
 }
@@ -87,7 +86,7 @@ static void test_dataloader() {
     test_load_csv_file();
 //    test_load_csv_file_l();
     test_load_csv_files("./test_input/first_part_xxxs.txt");
-//    test_load_csv_files("./test_input/first_part_m.txt");
+    test_load_csv_files("./test_input/first_part_m.txt");
 }
 
 ////////////
@@ -647,15 +646,21 @@ static void test_predicates() {
     test_predicate_simple_2();
     test_predicate_combined();
 
-    test_predicate_m_1();
+    // crash with 512 MB RAM
+//    test_predicate_m_1();
+}
+
+static void test_join() {
+
 }
 
 int main() {
     // test assert
     ASSERT(1);
     test_dataloader();
-    test_parse();
-    test_predicates();
+//    test_parse();
+//    test_predicates();
+//    test_join();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;
