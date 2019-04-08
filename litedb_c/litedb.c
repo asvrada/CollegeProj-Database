@@ -351,7 +351,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
     c->input++;
 
     // parse column
-    // parse letter c at the beginning of column
+    // parse 'c' at the beginning of column
     c->input++;
 
     head = c->top;
@@ -360,7 +360,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
     while (1) {
         char ch = tmp_p[0];
 
-        // todo: end of column
+        // if its not number, then its end of column
         if (!IS_NUMERIC(ch)) {
             size_t len = c->top - head;
             // string of number, no terminal
@@ -376,6 +376,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
             // clean up
             free(tmp_str);
 
+            // move head to this non numeric char
             c->input = tmp_p;
             break;
         }
@@ -1205,12 +1206,12 @@ void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
  * The actual file will be write if buffer is almost full
  */
 void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, struct_fwrite_buffer *manual_buffer) {
-    // todo: page align with rows
     size_t size_buffer = size * count;
 
     // manual buffer is full
     if (manual_buffer->cur_size + size_buffer >= manual_buffer->max_size) {
-        fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->cur_size, stream);
+        // we write the entire block into disk, so it's page aligned
+        fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->max_size, stream);
 
         // manual buffer is now empty
         manual_buffer->cur_size = 0;
@@ -1225,7 +1226,12 @@ void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, stru
  * Write whats in the buffer and empty the buffer (but not freeing the memory)
  */
 void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
-    fwrite(manual_buffer->buffer, sizeof(*(manual_buffer->buffer)), manual_buffer->cur_size, stream);
+    if (manual_buffer->cur_size == 0) {
+        return;
+    }
+
+    // write entire buffer into disk, so it's page aligned
+    fwrite(manual_buffer->buffer, sizeof(*(manual_buffer->buffer)), manual_buffer->max_size, stream);
 
     // buffer is now empty
     manual_buffer->cur_size = 0;
@@ -1238,7 +1244,7 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
  * @param file
  * @param predicate
  */
-// todo: enable this
+// todo: remove this
 #if 0
 void filter_data_given_predicate(struct_file *file, struct_predicate *predicate) {
     ASSERT(file->relation == predicate->lhs.relation);
@@ -1351,7 +1357,6 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
  * @param file: path to the file on the disk
  * @param loaded_file: struct describing the loaded file
  */
-// todo: count number of rows, and write rows in a page aligned manner
 void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     // set name for files to write to disk
     char path_file_binary[] = "?.binary";
@@ -1390,7 +1395,6 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     int size_buffer_row = 0;
 
     // tmp variables used inside loop
-    // todo: current, number, cursor, cursor_prev
     while (1) {
         size_t size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
 

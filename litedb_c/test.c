@@ -85,14 +85,15 @@ static void test_load_csv_files(const char* path) {
 static void test_dataloader() {
     test_load_csv_file();
 //    test_load_csv_file_l();
-    test_load_csv_files("./test_input/first_part_xxxs.txt");
-    test_load_csv_files("./test_input/first_part_m.txt");
+//    test_load_csv_files("./test_input/first_part_xxxs.txt");
+//    test_load_csv_files("./test_input/first_part_m.txt");
 }
 
 ////////////
 // Parser //
 ////////////
 
+// todo: remove this
 #if 0
 // below are tests for first part
 static void test_parse_first_part() {
