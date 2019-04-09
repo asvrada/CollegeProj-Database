@@ -999,9 +999,13 @@ $$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$
 Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20Loader
  */
 
-const int SIZE_PAGE = 4096;
-const int SIZE_BUFFER = 2 * SIZE_PAGE;
-const int NUM_BUFFER_PER_RELATION = 8192;
+//const int SIZE_PAGE = 4096;
+//const int SIZE_BUFFER = 2 * SIZE_PAGE;
+//const int NUM_BUFFER_PER_RELATION = 8192;
+
+#define SIZE_PAGE 4096
+#define SIZE_BUFFER (2 * SIZE_PAGE)
+#define NUM_BUFFER_PER_RELATION 8192
 
 /**
  * struct that stores intermediate table (after join, after predicates)
