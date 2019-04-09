@@ -1131,8 +1131,10 @@ void init_struct_file_binary(struct_file_binary *file) {
 }
 
 void free_struct_file_binary(struct_file_binary *file) {
-    fclose(file->file_binary);
-    file->file_binary = NULL;
+    if (file->file_binary != NULL) {
+        fclose(file->file_binary);
+        file->file_binary = NULL;
+    }
 
     free(file->pages);
     file->pages = NULL;
