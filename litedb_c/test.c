@@ -620,11 +620,11 @@ static void test_predicate_combined() {
     free_struct_file(&file);
 }
 
-static void test_predicate_xs_1() {
+static void test_predicate_xxs_1() {
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file('A', "../data/xs/A.csv", &file);
+    load_csv_file('A', "../data/xxs/A.csv", &file);
 
     struct_predicate predicate;
 
@@ -634,9 +634,9 @@ static void test_predicate_xs_1() {
     predicate.rhs = 5000;
 
     filter_data_given_predicate(&file, &predicate);
-    EXPECT_EQ_INT(50000, file.num_row);
+    EXPECT_EQ_INT(1000, file.num_row);
     EXPECT_EQ_INT(50, file.num_col);
-    EXPECT_EQ_INT(49929, file.df->num_row);
+    EXPECT_EQ_INT(919, file.df->num_row);
 
     free_struct_file(&file);
 }
@@ -668,7 +668,7 @@ static void test_predicates() {
     test_predicate_combined();
 
     // crash with 512 MB RAM
-    test_predicate_xs_1();
+    test_predicate_xxs_1();
     test_predicate_m_1();
 }
 

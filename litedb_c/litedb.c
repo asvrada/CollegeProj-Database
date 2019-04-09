@@ -1246,20 +1246,25 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
 const int *const select_row_from_file(struct_file *file, int row) {
     assert (file->num_row > row);
 
+    // 1. calculate offset in bytes to read from disk
+    const int byte_per_row = file->num_col * sizeof(int);
+    const int row_per_buffer = SIZE_BUFFER / byte_per_row;
+
     // if buffered
     if (file->file_binary.row_start <= row && row < file->file_binary.row_end) {
-        return file->file_binary.pages + (row - file->file_binary.row_start) * file->num_col;
+        // offset (in number of buffers) from the beginning of pages
+        const int offset_num_buffer = (row - file->file_binary.row_start) / row_per_buffer;
+
+        return (int *) ((char *) file->file_binary.pages + (offset_num_buffer * SIZE_BUFFER)) +
+               (row - file->file_binary.row_start - offset_num_buffer * row_per_buffer) * file->num_col;
     }
 
+    // offset (in number of buffers) from the beginning of file
+    const int offset_num_buffer = row / row_per_buffer;
+
     // not buffered, read pages into buffer
-    // 1. calculate offset in bytes to read from disk
-    int byte_per_row = file->num_col * sizeof(int);
-    int row_per_buffer = SIZE_BUFFER / byte_per_row;
-    // offset (in number of buffers)
-    int offset_num_buffer = row / row_per_buffer;
     // offset in bytes
     size_t offset = offset_num_buffer * SIZE_BUFFER;
-
     // move pointer to that bytes
     fseek(file->file_binary.file_binary, offset, SEEK_SET);
 
