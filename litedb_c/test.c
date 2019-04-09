@@ -93,8 +93,6 @@ static void test_dataloader() {
 // Parser //
 ////////////
 
-// todo: remove this
-#if 0
 // below are tests for first part
 static void test_parse_first_part() {
     const char path[] = "./test_input/first_part_xxxs.txt";
@@ -622,6 +620,27 @@ static void test_predicate_combined() {
     free_struct_file(&file);
 }
 
+static void test_predicate_xs_1() {
+    struct_file file;
+    init_struct_file(&file);
+
+    load_csv_file('A', "../data/xs/A.csv", &file);
+
+    struct_predicate predicate;
+
+    predicate.lhs.relation = 'A';
+    predicate.lhs.column = 1;
+    predicate.operator = GREATER_THAN;
+    predicate.rhs = 5000;
+
+    filter_data_given_predicate(&file, &predicate);
+    EXPECT_EQ_INT(50000, file.num_row);
+    EXPECT_EQ_INT(50, file.num_col);
+    EXPECT_EQ_INT(49929, file.df->num_row);
+
+    free_struct_file(&file);
+}
+
 static void test_predicate_m_1() {
     struct_file file;
     init_struct_file(&file);
@@ -649,22 +668,21 @@ static void test_predicates() {
     test_predicate_combined();
 
     // crash with 512 MB RAM
-//    test_predicate_m_1();
+    test_predicate_xs_1();
+    test_predicate_m_1();
 }
 
 static void test_join() {
 
 }
 
-#endif
-
 int main() {
     // test assert
     ASSERT(1);
     test_dataloader();
-//    test_parse();
-//    test_predicates();
-//    test_join();
+    test_parse();
+    test_predicates();
+    test_join();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;

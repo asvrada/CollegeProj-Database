@@ -999,8 +999,9 @@ $$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$
 Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20Loader
  */
 
-#define PAGE_SIZE 4096
-#define SIZE_BUFFER 2 * PAGE_SIZE
+const int SIZE_PAGE = 4096;
+const int SIZE_BUFFER = 2 * SIZE_PAGE;
+const int NUM_BUFFER_PER_RELATION = 8192;
 
 /**
  * struct that stores intermediate table (after join, after predicates)
@@ -1038,33 +1039,20 @@ typedef struct {
     int num_row;
 } struct_data_frame;
 
-// todo: I need some function to read pages from binary file, given index to rows I want from original file
-
 /**
- *
+ * Represents each binary file
  */
 typedef struct {
-    /**
-     * @nullable
-     */
     FILE *file_binary;
 
-    // todo: some sort of buffer of pages
-    // inclusive
+    // size (in bytes): NUM_BUFFER_PER_RELATION * SIZE_BUFFER
+    int *pages;
+
+    // the index of first row the pages stores (inclusive)
     int row_start;
-    // exclusive
+    // the index of last row the pages stores (exclusive)
     int row_end;
 } struct_file_binary;
-
-/**
- * todo: should always stay in memory?
- */
-typedef struct {
-    /**
-     * @nullable
-     */
-    FILE *file_meta;
-} struct_file_meta;
 
 /**
  * A struct that describe a relation
@@ -1073,20 +1061,15 @@ typedef struct {
     // name of this file / relation
     char relation;
 
-    // this value will be whatever the first path of the program recevies
-    // relative or absolute path to the file on disk
-    // once initilized, should not change
-    char *path;
-
     /**
      * The struct to the .binary file
      */
-//    struct_file_binary file_binary;
+    struct_file_binary file_binary;
 
     /**
      * The struct to the .meta file
      */
-//    struct_file_meta file_meta;
+//    FILE* file_meta;
 
     // todo: move them into metadata
     // number of column and rows in the relation
@@ -1135,21 +1118,35 @@ void free_struct_data_frame(struct_data_frame *df) {
     df->num_row = 0;
 }
 
+void init_struct_file_binary(struct_file_binary *file) {
+    file->file_binary = NULL;
+    file->pages = (int *) malloc(NUM_BUFFER_PER_RELATION * SIZE_BUFFER);
+    memset(file->pages, 0, NUM_BUFFER_PER_RELATION * SIZE_BUFFER);
+    file->row_end = 0;
+    file->row_start = 0;
+}
+
+void free_struct_file_binary(struct_file_binary *file) {
+    fclose(file->file_binary);
+    file->file_binary = NULL;
+
+    free(file->pages);
+    file->pages = NULL;
+    file->row_end = 0;
+    file->row_start = 0;
+}
+
 void init_struct_file(struct_file *file) {
     file->relation = '\0';
-    file->path = NULL;
     file->num_col = 0;
     file->num_row = 0;
     file->df = NULL;
+
+    init_struct_file_binary(&file->file_binary);
 }
 
 void free_struct_file(struct_file *file) {
     file->relation = '\0';
-
-    if (file->path != NULL) {
-        free(file->path);
-        file->path = NULL;
-    }
 
     file->num_col = 0;
     file->num_row = 0;
@@ -1159,6 +1156,8 @@ void free_struct_file(struct_file *file) {
         free(file->df);
         file->df = NULL;
     }
+
+    free_struct_file_binary(&file->file_binary);
 }
 
 void init_struct_files(struct_files *files, int length) {
@@ -1240,14 +1239,54 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
 }
 
 /**
+ * Select the index of row from file
+ * @param file
+ * @param row: 0 indexed
+ */
+const int *const select_row_from_file(struct_file *file, int row) {
+    assert (file->num_row > row);
+
+    // if buffered
+    if (file->file_binary.row_start <= row && row < file->file_binary.row_end) {
+        return file->file_binary.pages + (row - file->file_binary.row_start) * file->num_col;
+    }
+
+    // not buffered, read pages into buffer
+    // 1. calculate offset in bytes to read from disk
+    int byte_per_row = file->num_col * sizeof(int);
+    int row_per_buffer = SIZE_BUFFER / byte_per_row;
+    // offset (in number of buffers)
+    int offset_num_buffer = row / row_per_buffer;
+    // offset in bytes
+    size_t offset = offset_num_buffer * SIZE_BUFFER;
+
+    // move pointer to that bytes
+    fseek(file->file_binary.file_binary, offset, SEEK_SET);
+
+    // read in pages
+    size_t size_read = fread(file->file_binary.pages, 1, NUM_BUFFER_PER_RELATION * SIZE_BUFFER,
+                             file->file_binary.file_binary);
+
+    assert(size_read != 0);
+
+    file->file_binary.row_start = offset_num_buffer * row_per_buffer;
+    file->file_binary.row_end = file->file_binary.row_start + row_per_buffer * NUM_BUFFER_PER_RELATION;
+
+    // if size_read is smaller than expected, update row end
+    if (size_read < NUM_BUFFER_PER_RELATION * SIZE_BUFFER) {
+        file->file_binary.row_end = file->file_binary.row_start + size_read / SIZE_BUFFER * row_per_buffer;
+    }
+
+    return file->file_binary.pages;
+}
+
+/**
  * Filter data in the relation, given predicate like A.c3 < 7666
  * And create filered index for input file
  *
  * @param file
  * @param predicate
  */
-// todo: remove this
-#if 0
 void filter_data_given_predicate(struct_file *file, struct_predicate *predicate) {
     ASSERT(file->relation == predicate->lhs.relation);
 
@@ -1276,7 +1315,6 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
 
     struct_data_frame *const df = file->df;
     const int row = file->df->num_row;
-    const int col = file->num_col;
 
     // pointer to file->df->index
     size_t slow = 0;
@@ -1293,7 +1331,8 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
     for (; fast < row; fast++) {
         shouldKeep = 0;
         // check predicate
-        number = file->data[df->index[fast] * col + column];
+        const int *const tmp_row = select_row_from_file(file, df->index[fast]);
+        number = tmp_row[column];
 
         switch (predicate->operator) {
             case EQUAL:
@@ -1331,8 +1370,7 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
 
     // if no rows selected, empty the relation
     if (df->num_row == 0) {
-        free(file->data);
-        file->data = NULL;
+        free_struct_file_binary(&file->file_binary);
         file->num_row = 0;
 
         // also empty the data frame
@@ -1344,7 +1382,6 @@ void filter_data_given_predicate(struct_file *file, struct_predicate *predicate)
         df->index = (int *) realloc(df->index, df->num_row * sizeof(int));
     }
 }
-#endif
 
 /**
  * Read csv file from disk and convert them into a more efficient format, then write back to disk
@@ -1368,7 +1405,7 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
 
     // freed at the end of this function
     FILE *file_input = fopen(file, "r");
-    FILE *file_binary = fopen(path_file_binary, "wb");
+    FILE *file_binary = fopen(path_file_binary, "wb+");
     // todo: file_meta
     // FILE *file_meta
 
@@ -1514,9 +1551,12 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
         fwrite_buffered_flush(&fwrite_buffer, file_binary);
     }
 
+    // assign value to loaded_file
     loaded_file->relation = relation;
+    loaded_file->file_binary.file_binary = file_binary;
     loaded_file->num_col = num_col;
     loaded_file->num_row = num_row;
+
 
     free(buffer);
     free(secondary_buffer);
@@ -1524,7 +1564,6 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     free_struct_fwrite_buffer(&fwrite_buffer);
 
     fclose(file_input);
-    fclose(file_binary);
 }
 
 /**
