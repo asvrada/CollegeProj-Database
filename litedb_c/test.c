@@ -668,7 +668,7 @@ static void test_predicates() {
     test_predicate_combined();
 
     test_predicate_xxs_1();
-    test_predicate_m_1();
+//    test_predicate_m_1();
 }
 
 /**
@@ -723,7 +723,7 @@ static void test_join_manual() {
 
     // check result
     // index = 0001
-    EXPECT_EQ_INT(2, (int)strlen(df.relations));
+    EXPECT_EQ_INT(2, (int) strlen(df.relations));
     EXPECT_EQ_INT(0, df.index[0]);
     EXPECT_EQ_INT(0, df.index[1]);
     EXPECT_EQ_INT(0, df.index[2]);
@@ -740,6 +740,50 @@ static void test_join() {
     test_join_manual();
 }
 
+static void test_main() {
+    freopen("./test_input/full.txt", "r", stdin);
+
+    char *first_part = NULL;
+    read_first_part_from_stdin(&first_part);
+
+    char *second_part = NULL;
+    read_second_part_from_stdin(&second_part);
+
+    // handle path to files
+    struct_input_files files;
+    init_struct_input_files(&files);
+
+    // parse first part
+    parse_first_part(&files, first_part);
+
+    // parse queries
+    struct_queries queries;
+    parse_second_part(&queries, second_part);
+
+    struct_files loaded_files;
+    init_struct_files(&loaded_files, files.length);
+
+    // load files into memory
+    load_csv_files(&files, &loaded_files);
+
+    // free data that we don't need
+    free(first_part);
+    free(second_part);
+    free_struct_input_files(&files);
+
+    // execute each query
+    for (int i = 0; i < queries.length; i++) {
+        execute(&loaded_files, &queries.queries[i]);
+
+        // clean up df after each query
+        free_only_struct_data_frames(&loaded_files);
+    }
+
+    // free this at the end
+    free_struct_queries(&queries);
+    free_struct_files(&loaded_files);
+}
+
 int main() {
     // test assert
     ASSERT(1);
@@ -747,6 +791,7 @@ int main() {
     test_parse();
     test_predicates();
     test_join();
+    test_main();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;
