@@ -57,7 +57,7 @@ static void test_load_csv_file_l() {
     free_struct_file(&file);
 }
 
-static void test_load_csv_files(const char* path) {
+static void test_load_csv_files(const char *path) {
     // redirect stdin
     freopen(path, "r", stdin);
 
@@ -85,7 +85,7 @@ static void test_load_csv_files(const char* path) {
 static void test_dataloader() {
     test_load_csv_file();
 //    test_load_csv_file_l();
-//    test_load_csv_files("./test_input/first_part_xxxs.txt");
+    test_load_csv_files("./test_input/first_part_xxxs.txt");
 //    test_load_csv_files("./test_input/first_part_m.txt");
 }
 
@@ -671,8 +671,73 @@ static void test_predicates() {
     test_predicate_m_1();
 }
 
-static void test_join() {
+/**
+ * 1. load path from stdin
+ * 2. load files given path
+ * 3. join
+ */
+static void test_join_manual() {
+    freopen("./test_input/join_manual.txt", "r", stdin);
 
+    char *input = NULL;
+
+    // 1. read path from stdin
+    read_first_part_from_stdin(&input);
+
+    struct_input_files inputs;
+    init_struct_input_files(&inputs);
+
+    parse_first_part(&inputs, input);
+
+    // 2. load files from disk
+    struct_files loaded_files;
+
+    load_csv_files(&inputs, &loaded_files);
+
+    // 3. join
+    // A.c2 = B.c0
+    struct_join join;
+    join.lhs.relation = 'A';
+    join.lhs.column = 2;
+    join.rhs.relation = 'B';
+    join.rhs.column = 0;
+
+    // create intermediate data frame
+    // free!
+    struct_data_frame df;
+    df.relations = (char *) malloc(2 * sizeof(char));
+    df.relations[0] = 'A';
+    df.relations[1] = '\0';
+
+    df.index = (int *) malloc(2 * sizeof(int));
+    df.index[0] = 0;
+    df.index[1] = 1;
+
+    df.num_row = 2;
+
+    // init dataframe for file
+    init_struct_data_frame_for_file(&loaded_files.files[0]);
+    init_struct_data_frame_for_file(&loaded_files.files[1]);
+
+    nested_loop_join(&loaded_files, &df, &loaded_files.files[1], &join);
+
+    // check result
+    // index = 0001
+    EXPECT_EQ_INT(2, (int)strlen(df.relations));
+    EXPECT_EQ_INT(0, df.index[0]);
+    EXPECT_EQ_INT(0, df.index[1]);
+    EXPECT_EQ_INT(0, df.index[2]);
+    EXPECT_EQ_INT(1, df.index[3]);
+    EXPECT_EQ_INT(2, df.num_row);
+
+    free(input);
+    free_struct_input_files(&inputs);
+    free_struct_files(&loaded_files);
+    free_struct_data_frame(&df);
+}
+
+static void test_join() {
+    test_join_manual();
 }
 
 int main() {

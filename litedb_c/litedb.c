@@ -179,6 +179,9 @@ static void *context_push(struct_parse_context *c, size_t size) {
             // expand the size to 1.5 times the original size
             // size += size / 2
             c->size += c->size >> 1;
+#if 1
+            printf("stack size: %zu MB\n", c->size / 1024 / 1024);
+#endif
         }
 
         c->stack = (char *) realloc(c->stack, c->size);
@@ -925,7 +928,7 @@ int parse_paths(struct_parse_context *c, struct_input_files *files) {
 /**
  * Parse name of relations from input string
  */
-int parse_first_part(struct_input_files *files, char *input) {
+int parse_first_part(struct_input_files *const files, const char *const input) {
     ASSERT(input != NULL);
 
     struct_parse_context c;
@@ -1109,6 +1112,23 @@ typedef struct {
 // Init & Free //
 /////////////////
 
+void init_struct_data_frame_for_file(struct_file *file) {
+    file->df = (struct_data_frame *) malloc(sizeof(struct_data_frame));
+
+    file->df->relations = (char *) malloc(2 * sizeof(char));
+    file->df->relations[0] = file->relation;
+    file->df->relations[1] = '\0';
+
+    // init index with index[i] = i where i = 0...number of rows
+    // size = number of rows
+    file->df->index = (int *) malloc(file->num_row * sizeof(int));
+    file->df->num_row = file->num_row;
+
+    for (int i = 0; i < file->df->num_row; i++) {
+        file->df->index[i] = i;
+    }
+}
+
 void free_struct_data_frame(struct_data_frame *df) {
     if (df == NULL) {
         return;
@@ -1249,7 +1269,7 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
  * @param file
  * @param row: 0 indexed
  */
-const int *const select_row_from_file(struct_file *file, int row) {
+const int *const select_row_from_file(struct_file *const file, int row) {
     ASSERT(file->num_row > row);
 
     // 1. calculate offset in bytes to read from disk
@@ -1292,109 +1312,6 @@ const int *const select_row_from_file(struct_file *file, int row) {
     }
 
     return file->file_binary.pages;
-}
-
-/**
- * Filter data in the relation, given predicate like A.c3 < 7666
- * And create filered index for input file
- *
- * @param file
- * @param predicate
- */
-void filter_data_given_predicate(struct_file *file, struct_predicate *predicate) {
-    ASSERT(file->relation == predicate->lhs.relation);
-
-    // empty file, do nothing
-    if (file->num_row == 0) {
-        return;
-    }
-
-    // if dataframe is NULL, create dataframe
-    if (file->df == NULL) {
-        file->df = (struct_data_frame *) malloc(sizeof(struct_data_frame));
-
-        file->df->relations = (char *) malloc(2 * sizeof(char));
-        file->df->relations[0] = file->relation;
-        file->df->relations[1] = '\0';
-
-        // init index with index[i] = i where i = 0...number of rows
-        // size = number of rows
-        file->df->index = (int *) malloc(file->num_row * sizeof(int));
-        file->df->num_row = file->num_row;
-
-        for (int i = 0; i < file->df->num_row; i++) {
-            file->df->index[i] = i;
-        }
-    }
-
-    struct_data_frame *const df = file->df;
-    const int row = file->df->num_row;
-
-    // pointer to file->df->index
-    size_t slow = 0;
-    // pointer to file->df->index
-    size_t fast = 0;
-
-    // index of column
-    int column = predicate->lhs.column;
-    // the number @ given column
-    int number = 0;
-    int shouldKeep = 0;
-
-    // for each row
-    for (; fast < row; fast++) {
-        shouldKeep = 0;
-        // check predicate
-        const int *const tmp_row = select_row_from_file(file, df->index[fast]);
-        number = tmp_row[column];
-
-        switch (predicate->operator) {
-            case EQUAL:
-                if (number == predicate->rhs) {
-                    shouldKeep = 1;
-                }
-                break;
-            case LESS_THAN:
-                if (number < predicate->rhs) {
-                    shouldKeep = 1;
-                }
-                break;
-            case GREATER_THAN:
-                if (number > predicate->rhs) {
-                    shouldKeep = 1;
-                }
-                break;
-            default:
-                fprintf(stderr, "Invalid operator");
-                break;
-        }
-
-        // if met, copy row @ fast to row @ slow, slow++
-        if (shouldKeep == 0) {
-            continue;
-        }
-
-        // copy index of row
-        df->index[slow] = fast;
-        slow++;
-    }
-
-    // update row of df
-    df->num_row = slow;
-
-    // if no rows selected, empty the relation
-    if (df->num_row == 0) {
-        free_struct_file_binary(&file->file_binary);
-        file->num_row = 0;
-
-        // also empty the data frame
-        free_struct_data_frame(file->df);
-        free(file->df);
-        file->df = NULL;
-    } else {
-        // realloc memory for df->index
-        df->index = (int *) realloc(df->index, df->num_row * sizeof(int));
-    }
 }
 
 /**
@@ -1448,6 +1365,7 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     int size_buffer_row = 0;
 
     while (1) {
+        // todo: bug: when there is no new line at the end of csv file, the program would crash
         int size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
 
         if (size_buffer == 0) {
@@ -1458,7 +1376,7 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
         int cursor_prev = 0;
 
         while (cursor < size_buffer) {
-            int current = buffer[cursor];
+            char current = buffer[cursor];
 
             // if its end of number
             if (current == ',' || current == '\n') {
@@ -1549,7 +1467,10 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
         }
     }
 
+    // todo: handle when csv has no newline at the end
+
     assert(size_buffer_row == 0);
+
 
     // write whats left inside output buffer to file
     if (fwrite_buffer.cur_size != 0) {
@@ -1585,6 +1506,227 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
     }
 
     // don't free struct_files
+}
+
+/*
+ ________                                            __      __                            ________                      __
+/        |                                          /  |    /  |                          /        |                    /  |
+$$$$$$$$/  __    __   ______    _______  __    __  _$$ |_   $$/   ______   _______        $$$$$$$$/  _______    ______  $$/  _______    ______
+$$ |__    /  \  /  | /      \  /       |/  |  /  |/ $$   |  /  | /      \ /       \       $$ |__    /       \  /      \ /  |/       \  /      \
+$$    |   $$  \/$$/ /$$$$$$  |/$$$$$$$/ $$ |  $$ |$$$$$$/   $$ |/$$$$$$  |$$$$$$$  |      $$    |   $$$$$$$  |/$$$$$$  |$$ |$$$$$$$  |/$$$$$$  |
+$$$$$/     $$  $$<  $$    $$ |$$ |      $$ |  $$ |  $$ | __ $$ |$$ |  $$ |$$ |  $$ |      $$$$$/    $$ |  $$ |$$ |  $$ |$$ |$$ |  $$ |$$    $$ |
+$$ |_____  /$$$$  \ $$$$$$$$/ $$ \_____ $$ \__$$ |  $$ |/  |$$ |$$ \__$$ |$$ |  $$ |      $$ |_____ $$ |  $$ |$$ \__$$ |$$ |$$ |  $$ |$$$$$$$$/
+$$       |/$$/ $$  |$$       |$$       |$$    $$/   $$  $$/ $$ |$$    $$/ $$ |  $$ |      $$       |$$ |  $$ |$$    $$ |$$ |$$ |  $$ |$$       |
+$$$$$$$$/ $$/   $$/  $$$$$$$/  $$$$$$$/  $$$$$$/     $$$$/  $$/  $$$$$$/  $$/   $$/       $$$$$$$$/ $$/   $$/  $$$$$$$ |$$/ $$/   $$/  $$$$$$$/
+                                                                                                              /  \__$$ |
+                                                                                                              $$    $$/
+                                                                                                               $$$$$$/
+ */
+
+int findIndexOf(const char *const input, int length, char val) {
+    for (int i = 0; i < length; i++) {
+        if (input[i] == val) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+/**
+ * Filter data in the relation, given predicate like A.c3 < 7666
+ * And create filered index for input file
+ *
+ * @param file
+ * @param predicate
+ */
+void filter_data_given_predicate(struct_file *file, struct_predicate *predicate) {
+    ASSERT(file->relation == predicate->lhs.relation);
+
+    // empty file, do nothing
+    if (file->num_row == 0) {
+        return;
+    }
+
+    // todo: move this to a new function
+    // if dataframe is NULL, create dataframe
+    if (file->df == NULL) {
+        init_struct_data_frame_for_file(file);
+    }
+
+    struct_data_frame *const df = file->df;
+    const int row = file->df->num_row;
+
+    // pointer to file->df->index
+    size_t slow = 0;
+    // pointer to file->df->index
+    size_t fast = 0;
+
+    // index of column
+    int column = predicate->lhs.column;
+    // the number @ given column
+    int number = 0;
+    int shouldKeep = 0;
+
+    // for each row
+    for (; fast < row; fast++) {
+        shouldKeep = 0;
+        // check predicate
+        const int *const tmp_row = select_row_from_file(file, df->index[fast]);
+        number = tmp_row[column];
+
+        switch (predicate->operator) {
+            case EQUAL:
+                if (number == predicate->rhs) {
+                    shouldKeep = 1;
+                }
+                break;
+            case LESS_THAN:
+                if (number < predicate->rhs) {
+                    shouldKeep = 1;
+                }
+                break;
+            case GREATER_THAN:
+                if (number > predicate->rhs) {
+                    shouldKeep = 1;
+                }
+                break;
+            default:
+                fprintf(stderr, "Invalid operator");
+                break;
+        }
+
+        // if met, copy row @ fast to row @ slow, slow++
+        if (shouldKeep == 0) {
+            continue;
+        }
+
+        // copy index of row
+        df->index[slow] = fast;
+        slow++;
+    }
+
+    // update row of df
+    df->num_row = slow;
+
+    // if no rows selected, empty the relation
+    if (df->num_row == 0) {
+        free_struct_file_binary(&file->file_binary);
+        file->num_row = 0;
+
+        // also empty the data frame
+        free_struct_data_frame(file->df);
+        free(file->df);
+        file->df = NULL;
+    } else {
+        // realloc memory for df->index
+        df->index = (int *) realloc(df->index, df->num_row * sizeof(int));
+    }
+}
+
+/**
+ * (Left Deep) Join two data frame that representing some relations
+ * We assume the input is always valid
+ *
+ * The result of join will be stored back into intermediate
+ *
+ * @param loaded_files: info about relations
+ * @param intermediate: the intermediate result of joining two relation
+ * @param relation: some of the original relation
+ */
+void nested_loop_join(const struct_files *const loaded_files,
+                      struct_data_frame *const intermediate,
+                      struct_file *const relation,
+                      const struct_join *join) {
+    ASSERT(loaded_files != NULL && intermediate != NULL && relation != NULL && join != NULL);
+
+    // first 1: size of relation
+    // second 1: make room for ending \0
+    size_t length_joined_relations = strlen(intermediate->relations) + 1 + 1;
+    // the name of the new relations, remeber to free the one from inter and assign this to it
+    char *joined_relations = (char *) malloc(length_joined_relations * sizeof(char));
+
+    // number of relations, or number of index per row, of intermediate dataframe
+    int inter_num_relations = strlen(intermediate->relations);
+
+    // assign value
+    memcpy(joined_relations, intermediate->relations, inter_num_relations);
+    joined_relations[length_joined_relations - 2] = relation->relation;
+    joined_relations[length_joined_relations] = '\0';
+
+    int *joined_index = NULL;
+
+    // todo: check if one of the df is empty, and don't init if isn't empty
+    // Init df for files without one
+    if (relation->df == NULL) {
+        init_struct_data_frame_for_file(relation);
+    }
+
+    // we use the stack again
+    struct_parse_context c;
+    init_struct_parse_context(&c, NULL);
+
+
+    int inter_offset_relation = findIndexOf(intermediate->relations,
+                                            inter_num_relations,
+                                            join->lhs.relation);
+
+    // pointer to loaded file on the left side of join
+    // join->lhs.relation - 'A' = index of the file
+    struct_file *const file_left = loaded_files->files + (join->lhs.relation - 'A');
+
+    // outer loop
+    // todo: cache rows from outer loop?
+    for (int row_inter = 0; row_inter < intermediate->num_row; row_inter++) {
+        const int *const row_left = select_row_from_file(file_left,
+                                                         intermediate->index[
+                                                                 row_inter * inter_num_relations +
+                                                                 inter_offset_relation]);
+
+        int number_left = row_left[join->lhs.column];
+
+        // inner loop
+        for (int row_relation = 0; row_relation < relation->df->num_row; row_relation++) {
+            const int *const row_right = select_row_from_file(relation,
+                                                              relation->df->index[row_relation]);
+
+            // select number from given columns
+
+            int number_right = row_right[join->rhs.column];
+
+            if (number_left == number_right) {
+                // todo: output this row
+                // copy index[row_inter] from inter, and concat it with index[row_relation]
+                size_t size_to_copy = inter_num_relations * sizeof(int);
+                memcpy(context_push(&c, size_to_copy),
+                       &(intermediate->index[row_inter * inter_num_relations]),
+                       size_to_copy);
+
+                *(int *) context_push(&c, sizeof(int)) = relation->df->index[row_relation];
+            }
+        }
+    }
+
+    // clean up, swap index and relations
+    // free original index and relation
+    free(intermediate->relations);
+    free(intermediate->index);
+
+    // assign new value
+    intermediate->relations = joined_relations;
+
+    // copy index
+    // size of index, in bytes
+    size_t top = c.top;
+    // memcpy
+    int* tmp_index = context_pop(&c, top);
+    intermediate->index = (int*) malloc(top);
+    memcpy(intermediate->index, tmp_index, top);
+
+    // bytes / sizeof int / number per row = num of row
+    intermediate->num_row = top / strlen(intermediate->relations) / sizeof(int);
+
+    free_struct_parse_context(&c);
 }
 
 #endif //LITE_DB_LITEDB_C
