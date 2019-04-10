@@ -1,20 +1,5 @@
 ../data/xxxs/A.csv,../data/xxxs/C.csv,../data/xxxs/B.csv,../data/xxxs/E.csv,../data/xxxs/D.csv
-23
-SELECT SUM(A.c6), SUM(E.c4), SUM(C.c3), SUM(E.c3)
-FROM A, C, D, E
-WHERE C.c2 = D.c2 AND A.c2 = C.c0 AND C.c1 = E.c0
-AND D.c0 = 501;
-
-SELECT SUM(A.c3), SUM(C.c3)
-FROM A, B, C, D
-WHERE A.c1 = B.c0 AND A.c2 = C.c0 AND A.c3 = D.c0
-AND A.c6 > -3222;
-
-SELECT SUM(A.c8), SUM(E.c1), SUM(B.c1)
-FROM A, B, C, E
-WHERE C.c1 = E.c0 AND A.c2 = C.c0 AND A.c1 = B.c0
-AND C.c2 > 3797;
-
+20
 SELECT SUM(D.c0), SUM(E.c2), SUM(D.c2), SUM(A.c8)
 FROM A, B, C, D, E
 WHERE C.c1 = E.c0 AND C.c2 = D.c2 AND A.c3 = D.c0 AND A.c1 = B.c0

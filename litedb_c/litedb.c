@@ -1196,7 +1196,9 @@ void free_struct_file_binary(struct_file_binary *file) {
         file->file_binary = NULL;
     }
 
-    free(file->pages);
+    if (file->pages != NULL) {
+        free(file->pages);
+    }
     file->pages = NULL;
     file->row_end = 0;
     file->row_start = 0;
@@ -1871,14 +1873,11 @@ void execute_selects(struct_files *const loaded_file, const struct_fourth_line *
  * @param tl
  * @param result
  */
-void execute_joins(struct_files *const loaded_file, const struct_third_line *const tl, struct_data_frame **result) {
+void execute_joins(struct_files *const loaded_file, const struct_third_line *const tl, struct_data_frame *inter) {
     if (tl->length == 0) {
         ASSERT(0);
         return;
     }
-
-    // at first, create inter data frame from one of the relation
-    struct_data_frame *inter = (struct_data_frame *) malloc(sizeof(struct_data_frame));
 
     // todo: simplify this!
     char first_relation = tl->joins[0].lhs.relation;
@@ -1918,8 +1917,6 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
 
         nested_loop_join(loaded_file, inter, rhs_file, join);
     }
-
-    *result = inter;
 }
 
 /**
@@ -1971,7 +1968,7 @@ void execute_sums(struct_files *const loaded_file,
 void execute(struct_files *const loaded_file, const struct_query *const query) {
     execute_selects(loaded_file, &query->fourth);
 
-    struct_data_frame *result = NULL;
+    struct_data_frame result;
 
     execute_joins(loaded_file, &query->third, &result);
 
@@ -1979,7 +1976,7 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     int *ans = (int *) malloc(size_ans);
     memset(ans, 0, size_ans);
 
-    execute_sums(loaded_file, &query->first, result, ans);
+    execute_sums(loaded_file, &query->first, &result, ans);
 
     for (int i = 0; i < query->first.length; i++) {
         printf("%d", ans[i]);
@@ -1989,8 +1986,7 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     }
     puts("");
 
-    free_struct_data_frame(result);
-    free(result);
+    free_struct_data_frame(&result);
     free(ans);
 }
 

@@ -763,7 +763,7 @@ static void test_main() {
     struct_files loaded_files;
     init_struct_files(&loaded_files, files.length);
 
-    // load files into memory
+    // convert csv files into binary representation
     load_csv_files(&files, &loaded_files);
 
     // free data that we don't need
