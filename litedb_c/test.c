@@ -667,7 +667,6 @@ static void test_predicates() {
     test_predicate_simple_2();
     test_predicate_combined();
 
-    // crash with 512 MB RAM
     test_predicate_xxs_1();
     test_predicate_m_1();
 }

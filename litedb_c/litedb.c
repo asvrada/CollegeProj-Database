@@ -1005,7 +1005,7 @@ Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20
 
 #define SIZE_PAGE 4096
 #define SIZE_BUFFER (2 * SIZE_PAGE)
-#define NUM_BUFFER_PER_RELATION 8192
+#define NUM_BUFFER_PER_RELATION 1024
 
 /**
  * struct that stores intermediate table (after join, after predicates)
@@ -1250,7 +1250,7 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
  * @param row: 0 indexed
  */
 const int *const select_row_from_file(struct_file *file, int row) {
-    assert (file->num_row > row);
+    ASSERT(file->num_row > row);
 
     // 1. calculate offset in bytes to read from disk
     const int byte_per_row = file->num_col * sizeof(int);
@@ -1278,7 +1278,10 @@ const int *const select_row_from_file(struct_file *file, int row) {
     size_t size_read = fread(file->file_binary.pages, 1, NUM_BUFFER_PER_RELATION * SIZE_BUFFER,
                              file->file_binary.file_binary);
 
-    assert(size_read != 0);
+    if (size_read == 0) {
+        // this should never happen
+        ASSERT(0);
+    }
 
     file->file_binary.row_start = offset_num_buffer * row_per_buffer;
     file->file_binary.row_end = file->file_binary.row_start + row_per_buffer * NUM_BUFFER_PER_RELATION;
@@ -1444,9 +1447,8 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     // number of int currently stored, if == num_col, write the buffer_row to output buffer and empty buffer
     int size_buffer_row = 0;
 
-    // tmp variables used inside loop
     while (1) {
-        size_t size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
+        int size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
 
         if (size_buffer == 0) {
             break;
@@ -1456,7 +1458,7 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
         int cursor_prev = 0;
 
         while (cursor < size_buffer) {
-            char current = buffer[cursor];
+            int current = buffer[cursor];
 
             // if its end of number
             if (current == ',' || current == '\n') {
@@ -1498,21 +1500,13 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
                     // this will always occur at the beginning of processing a new buffer
                     assert(cursor_prev == 0);
 
-                    int size_tmp = size_secondary_buffer + cursor;
-                    char *tmp = malloc(size_tmp + 1);
+                    // copy the beginning of buffer (until cursor) to the end of secondary buffer
+                    memcpy(secondary_buffer + size_secondary_buffer, buffer, cursor);
+                    size_secondary_buffer += cursor;
+                    secondary_buffer[size_secondary_buffer] = '\0';
 
-                    // copy secondary buffer to tmp buffer
-                    memcpy(tmp, secondary_buffer, size_secondary_buffer);
-                    // copy buffer to tmp buffer
-                    memcpy(tmp + size_secondary_buffer, buffer, cursor);
-                    tmp[size_tmp] = 0;
+                    number = strtol(secondary_buffer, NULL, 0);
 
-                    number = strtol(tmp, NULL, 0);
-
-                    // free tmp buffer
-                    free(tmp);
-
-                    // clear secondary buffer
                     size_secondary_buffer = 0;
                 }
 
