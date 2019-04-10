@@ -761,7 +761,6 @@ static void test_main() {
     parse_second_part(&queries, second_part);
 
     struct_files loaded_files;
-    init_struct_files(&loaded_files, files.length);
 
     // convert csv files into binary representation
     load_csv_files(&files, &loaded_files);
