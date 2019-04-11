@@ -758,7 +758,7 @@ static void test_join() {
 }
 
 static void test_main() {
-    freopen("./test_input/full_xxxs.txt", "r", stdin);
+    freopen("./test_input/full_xs.txt", "r", stdin);
 
     char *first_part = NULL;
     read_first_part_from_stdin(&first_part);
