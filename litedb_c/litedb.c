@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <inttypes.h>
 
 // runtime assert
 #define ASSERT(val) \
@@ -1025,7 +1026,7 @@ Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20
 
 #define SIZE_PAGE 4096
 #define SIZE_BUFFER (2 * SIZE_PAGE)
-#define NUM_BUFFER_PER_RELATION 1024
+#define NUM_BUFFER_PER_RELATION 4096
 
 /**
  * struct that stores intermediate table (after join, after predicates)
@@ -1166,8 +1167,13 @@ void free_struct_data_frame(struct_data_frame *df) {
         return;
     }
 
-    free(df->relations);
-    free(df->index);
+    if (df->relations != NULL) {
+        free(df->relations);
+    }
+
+    if (df->relations != NULL) {
+        free(df->index);
+    }
 
     df->relations = NULL;
     df->index = NULL;
@@ -1310,10 +1316,7 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
  * @param file
  * @param row: 0 indexed
  */
-const int *const select_row_from_file(struct_file *const file, int row) {
-    if (!(file->num_row > row)) {
-        return 0;
-    }
+const int *const select_row_from_file(struct_file *const file, const int row) {
     ASSERT(file->num_row > row);
 
     // 1. calculate offset in bytes to read from disk
@@ -1323,14 +1326,14 @@ const int *const select_row_from_file(struct_file *const file, int row) {
     // if buffered
     if (file->file_binary.row_start <= row && row < file->file_binary.row_end) {
         // offset (in number of buffers) from the beginning of pages
-        const int offset_num_buffer = (row - file->file_binary.row_start) / row_per_buffer;
+        int offset_num_buffer = (row - file->file_binary.row_start) / row_per_buffer;
 
         return (int *) ((char *) file->file_binary.pages + (offset_num_buffer * SIZE_BUFFER)) +
                (row - file->file_binary.row_start - offset_num_buffer * row_per_buffer) * file->num_col;
     }
 
     // offset (in number of buffers) from the beginning of file
-    const int offset_num_buffer = row / row_per_buffer;
+    int offset_num_buffer = row / row_per_buffer;
 
     // not buffered, read pages into buffer
     // offset in bytes
@@ -1355,7 +1358,8 @@ const int *const select_row_from_file(struct_file *const file, int row) {
         file->file_binary.row_end = file->file_binary.row_start + size_read / SIZE_BUFFER * row_per_buffer;
     }
 
-    return file->file_binary.pages;
+    return file->file_binary.pages +
+           (row - file->file_binary.row_start) * file->num_col;
 }
 
 /**
@@ -1651,15 +1655,10 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
     // update row of df
     df->num_row = slow;
 
-    // if no rows selected, empty the relation
+    // if no rows selected, empty the index
     if (df->num_row == 0) {
-        free_struct_file_binary(&file->file_binary);
-        file->num_row = 0;
-
-        // also empty the data frame
-        free_struct_data_frame(file->df);
-        free(file->df);
-        file->df = NULL;
+        free(df->index);
+        df->index = 0;
     } else {
         // realloc memory for df->index
         df->index = (int *) realloc(df->index, df->num_row * sizeof(int));
@@ -1778,7 +1777,6 @@ void nested_loop_join(const struct_files *const loaded_files,
 }
 
 
-// todo: if two relations are already in the inter, don't create new string
 void nested_loop_join_both_joined_before(const struct_files *const loaded_files,
                                          struct_data_frame *const intermediate,
                                          const struct_join *join) {
@@ -1800,31 +1798,22 @@ void nested_loop_join_both_joined_before(const struct_files *const loaded_files,
     struct_file *const file_left = loaded_files->files + (join->lhs.relation - 'A');
     struct_file *const file_right = loaded_files->files + (join->rhs.relation - 'A');
 
-    for (int i_row_left = 0; i_row_left < intermediate->num_row; i_row_left++) {
-        const int *const row_left = select_row_from_file(file_left,
-                                                         intermediate->index[i_row_left * num_relations + offset_lhs]);
+    // for each row in inter
+    for (int i = 0; i < intermediate->num_row; i++) {
+        const int *const row_index = &intermediate->index[i * num_relations];
+
+        const int *const row_left = select_row_from_file(file_left, row_index[offset_lhs]);
+        const int *const row_right = select_row_from_file(file_right, row_index[offset_rhs]);
 
         int number_left = row_left[join->lhs.column];
+        int number_right = row_right[join->rhs.column];
 
-        for (int i_row_right = 0; i_row_right < intermediate->num_row; i_row_right++) {
-            const int *const row_right = select_row_from_file(file_right,
-                                                              intermediate->index[i_row_right * num_relations +
-                                                                                  offset_rhs]);
+        if (number_left == number_right) {
+            size_t size_row = num_relations * sizeof(int);
 
-            int number_right = row_right[join->rhs.column];
-
-            if (number_left == number_right) {
-                //  Keep both row
-                size_t size_row = num_relations * sizeof(int);
-
-                memcpy(context_push(&c, size_row),
-                       &(intermediate->index[i_row_left * num_relations]),
-                       size_row);
-
-                memcpy(context_push(&c, size_row),
-                       &(intermediate->index[i_row_right * num_relations]),
-                       size_row);
-            }
+            memcpy(context_push(&c, size_row),
+                   row_index,
+                   size_row);
         }
     }
 
@@ -1873,6 +1862,7 @@ void execute_selects(struct_files *const loaded_file, const struct_fourth_line *
  * @param tl
  * @param result
  */
+ // did I miss relations without joins...
 void execute_joins(struct_files *const loaded_file, const struct_third_line *const tl, struct_data_frame *inter) {
     if (tl->length == 0) {
         ASSERT(0);
@@ -1898,7 +1888,6 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
             && -1 != findIndexOf(inter->relations, strlen(inter->relations), join->rhs.relation)) {
 
             nested_loop_join_both_joined_before(loaded_file, inter, join);
-
             continue;
         }
 
@@ -1928,7 +1917,8 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
  */
 void execute_sums(struct_files *const loaded_file,
                   const struct_first_line *const fl,
-                  struct_data_frame *result, int *ans) {
+                  struct_data_frame *result,
+                  int64_t *ans) {
     int num_relations = strlen(result->relations);
 
     // for each row in result
@@ -1965,6 +1955,8 @@ void execute_sums(struct_files *const loaded_file,
  *
  * @param query
  */
+#define DEBUG 1
+
 void execute(struct_files *const loaded_file, const struct_query *const query) {
     execute_selects(loaded_file, &query->fourth);
 
@@ -1972,14 +1964,16 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
 
     execute_joins(loaded_file, &query->third, &result);
 
-    size_t size_ans = query->first.length * sizeof(int);
-    int *ans = (int *) malloc(size_ans);
+    size_t size_ans = query->first.length * sizeof(int64_t);
+    int64_t *ans = (int64_t *) malloc(size_ans);
     memset(ans, 0, size_ans);
 
     execute_sums(loaded_file, &query->first, &result, ans);
 
     for (int i = 0; i < query->first.length; i++) {
-        printf("%d", ans[i]);
+        if (result.num_row != 0) {
+            printf("%" PRId64, ans[i]);
+        }
         if (i != query->first.length - 1) {
             putc(',', stdout);
         }

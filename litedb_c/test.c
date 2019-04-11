@@ -42,17 +42,34 @@ static void test_load_csv_file() {
     EXPECT_EQ_INT(2, file.num_row);
     EXPECT_EQ_INT(5, file.num_col);
 
+    const int *row = select_row_from_file(&file, 0);
+
+    EXPECT_EQ_INT(-1, row[0]);
+    EXPECT_EQ_INT(-2308, row[1]);
+
     free_struct_file(&file);
 }
 
-static void test_load_csv_file_l() {
+static void test_load_csv_file_xs() {
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file('A', "../data/l/A.csv", &file);
+    load_csv_file('A', "../data/xs/A.csv", &file);
 
-    EXPECT_EQ_INT(10000000, file.num_row);
-    EXPECT_EQ_INT(50, file.num_col);
+    const int *row = select_row_from_file(&file, 49999);
+
+    EXPECT_EQ_INT(6357, row[0]);
+    EXPECT_EQ_INT(1393518, row[1]);
+
+    row = select_row_from_file(&file, 0);
+
+    EXPECT_EQ_INT(-5359, row[0]);
+    EXPECT_EQ_INT(3391410, row[1]);
+
+    row = select_row_from_file(&file, 26401);
+
+    EXPECT_EQ_INT(-4777, row[0]);
+    EXPECT_EQ_INT(1440647, row[1]);
 
     free_struct_file(&file);
 }
@@ -84,8 +101,8 @@ static void test_load_csv_files(const char *path) {
 
 static void test_dataloader() {
     test_load_csv_file();
-//    test_load_csv_file_l();
-    test_load_csv_files("./test_input/first_part_xxxs.txt");
+    test_load_csv_file_xs();
+//    test_load_csv_files("./test_input/first_part_xs.txt");
 //    test_load_csv_files("./test_input/first_part_m.txt");
 }
 
@@ -569,24 +586,24 @@ static void test_predicate_simple_1() {
     free_struct_file(&file);
 }
 
-// test A.c1 > 5000
 static void test_predicate_simple_2() {
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file('A', "../data/xxxs/A.csv", &file);
+    load_csv_file('B', "../data/xxxs/B.csv", &file);
 
     struct_predicate predicate;
 
-    predicate.lhs.relation = 'A';
-    predicate.lhs.column = 1;
-    predicate.operator = GREATER_THAN;
-    predicate.rhs = 5000;
+    // B.c2 = -8622;
+    predicate.lhs.relation = 'B';
+    predicate.lhs.column = 2;
+    predicate.operator = EQUAL;
+    predicate.rhs = -8622;
 
     filter_data_given_predicate(&file, &predicate);
-    EXPECT_EQ_INT(100, file.num_row);
-    EXPECT_EQ_INT(10, file.num_col);
-    EXPECT_EQ_INT(58, file.df->num_row);
+    EXPECT_EQ_INT(10, file.num_row);
+    EXPECT_EQ_INT(5, file.num_col);
+    EXPECT_EQ_INT(1, file.df->num_row);
 
     free_struct_file(&file);
 }
@@ -615,7 +632,7 @@ static void test_predicate_combined() {
     // what if we select from already empty file?
     filter_data_given_predicate(&file, &predicate2);
 
-    EXPECT_EQ_INT(0, file.num_row);
+    EXPECT_EQ_INT(0, file.df->num_row);
 
     free_struct_file(&file);
 }
@@ -741,7 +758,7 @@ static void test_join() {
 }
 
 static void test_main() {
-    freopen("./test_input/full.txt", "r", stdin);
+    freopen("./test_input/full_xxxs.txt", "r", stdin);
 
     char *first_part = NULL;
     read_first_part_from_stdin(&first_part);
@@ -786,10 +803,10 @@ static void test_main() {
 int main() {
     // test assert
     ASSERT(1);
-//    test_dataloader();
-//    test_parse();
-//    test_predicates();
-//    test_join();
+    test_dataloader();
+    test_parse();
+    test_predicates();
+    test_join();
     test_main();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);

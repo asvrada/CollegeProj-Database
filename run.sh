@@ -4,3 +4,4 @@
 # ./a.out
 
 ./litedb_c/cmake-build-debug/litedb
+# python dump.py

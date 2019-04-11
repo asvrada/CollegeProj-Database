@@ -1,10 +1,5 @@
 ../data/xxxs/A.csv,../data/xxxs/C.csv,../data/xxxs/B.csv,../data/xxxs/E.csv,../data/xxxs/D.csv
-20
-SELECT SUM(D.c0), SUM(E.c2), SUM(D.c2), SUM(A.c8)
-FROM A, B, C, D, E
-WHERE C.c1 = E.c0 AND C.c2 = D.c2 AND A.c3 = D.c0 AND A.c1 = B.c0
-AND D.c4 > 2332;
-
+19
 SELECT SUM(D.c4), SUM(C.c4)
 FROM A, C, D, E
 WHERE A.c3 = D.c0 AND C.c2 = D.c2 AND A.c2 = C.c0 AND C.c1 = E.c0

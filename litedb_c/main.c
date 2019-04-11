@@ -13,9 +13,6 @@ int main() {
     char *second_part = NULL;
     read_second_part_from_stdin(&second_part);
 
-    printf("%s", first_part);
-    printf("%s", second_part);
-
     // handle path to files
     struct_input_files files;
     init_struct_input_files(&files);
@@ -23,13 +20,14 @@ int main() {
     // parse first part
     parse_first_part(&files, first_part);
 
-    // load files into memory
-    struct_files loaded_files;
-    init_struct_files(&loaded_files, files.length);
-
     // parse queries
     struct_queries queries;
     parse_second_part(&queries, second_part);
+
+    struct_files loaded_files;
+
+    // convert csv files into binary representation
+    load_csv_files(&files, &loaded_files);
 
     // free data that we don't need
     free(first_part);
@@ -39,6 +37,9 @@ int main() {
     // execute each query
     for (int i = 0; i < queries.length; i++) {
         execute(&loaded_files, &queries.queries[i]);
+
+        // clean up df after each query
+        free_only_struct_data_frames(&loaded_files);
     }
 
     // free this at the end
