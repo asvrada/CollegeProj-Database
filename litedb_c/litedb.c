@@ -1574,12 +1574,44 @@ $$$$$$$$/ $$/   $$/  $$$$$$$/  $$$$$$$/  $$$$$$/     $$$$/  $$/  $$$$$$/  $$/   
  * This struct is used to store number and the index of row they are in
  */
 typedef struct {
+    // the number at column
     int number;
+    // the index or row in dataframe.index
     int row;
 } struct_number_row;
 
-int cmp_struct_number_row(const void *p1, const void *p2) {
-    return ((const struct_number_row *) p1)->number - ((const struct_number_row *) p2)->number;
+int cmp_struct_number_row_qsort(const void *p1, const void *p2) {
+    const struct_number_row *a = (const struct_number_row *) p1;
+    const struct_number_row *b = (const struct_number_row *) p2;
+
+    if (a->number != b->number) {
+        if (a->number < b->number) {
+            return -1;
+        } else {
+            return 1;
+        }
+    }
+
+    if (a->row < b->row) {
+        return -1;
+    } else if (a->row > b->row) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+int cmp_struct_number_row_bsearch(const void *p1, const void *p2) {
+    const struct_number_row *a = (const struct_number_row *) p1;
+    const struct_number_row *b = (const struct_number_row *) p2;
+
+    if (a->number < b->number) {
+        return -1;
+    } else if (a->number > b->number) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 int findIndexOf(const char *const input, int length, char val) {
@@ -1613,7 +1645,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
     }
 
     struct_data_frame *const df = file->df;
-    const int row = file->df->num_row;
+    const int row = df->num_row;
 
     // pointer to file->df->index
     size_t slow = 0;
@@ -1739,7 +1771,7 @@ void nested_loop_join(const struct_files *const loaded_files,
     /////////////////////////////////////
     struct_number_row *buffer_outer_loop = NULL;
     // we limit the memory useage of this buffer to the follow size
-    // 2^24 * 8 bytes = 134 MB
+    // 2^24 (16777216) * 8 bytes = 134 MB
     int max_length_buffer_outer_loop = 16777216;
 
     // check if the rows from outer loop can entirely fit in the buffer
@@ -1769,7 +1801,7 @@ void nested_loop_join(const struct_files *const loaded_files,
         }
 
         // when buffer is full, sort it
-        qsort(buffer_outer_loop, length_buffer_outer_loop, sizeof(struct_number_row), cmp_struct_number_row);
+        qsort(buffer_outer_loop, length_buffer_outer_loop, sizeof(struct_number_row), cmp_struct_number_row_qsort);
 
         // inner loop
         for (int row_relation = 0; row_relation < relation->df->num_row; row_relation++) {
@@ -1782,14 +1814,14 @@ void nested_loop_join(const struct_files *const loaded_files,
             struct_number_row key;
             key.number = number_right;
             // doesn't matter
-            key.row = 0;
+            key.row = -1;
 
             // use binary search to find number right
             struct_number_row const *res = bsearch(&key,
                                                    buffer_outer_loop,
                                                    length_buffer_outer_loop,
                                                    sizeof(struct_number_row),
-                                                   cmp_struct_number_row);
+                                                   cmp_struct_number_row_bsearch);
 
             if (res == NULL) {
                 continue;
@@ -2031,6 +2063,7 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     struct_data_frame result;
 
     // join
+    // todo: bug: sometimes the number of rows is wrong
     execute_joins(loaded_file, &query->third, &result);
 
     size_t size_ans = query->first.length * sizeof(int64_t);
