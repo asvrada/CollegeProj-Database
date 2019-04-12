@@ -1,0 +1,7 @@
+../data/m/A.csv,../data/m/C.csv,../data/m/B.csv,../data/m/F.csv,../data/m/G.csv,../data/m/P.csv,../data/m/E.csv,../data/m/D.csv,../data/m/I.csv,../data/m/H.csv,../data/m/J.csv,../data/m/K.csv,../data/m/O.csv,../data/m/N.csv,../data/m/L.csv,../data/m/M.csv
+1
+SELECT SUM(A.c26), SUM(A.c22), SUM(A.c43), SUM(A.c25)
+FROM A, J, B, K
+WHERE A.c9 = J.c0 AND A.c1 = B.c0 AND A.c10 = K.c0
+AND A.c16 > -4899;
+

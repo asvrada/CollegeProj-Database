@@ -1,6 +1,7 @@
 ../data/xs/A.csv,../data/xs/C.csv,../data/xs/B.csv,../data/xs/F.csv,../data/xs/E.csv,../data/xs/D.csv
-2
+1
 SELECT SUM(D.c1), SUM(C.c2)
 FROM C, D, E, F
 WHERE C.c1 = E.c0 AND F.c1 = E.c1 AND D.c1 = F.c0 AND C.c2 = D.c2
 AND C.c2 > 3854137 AND C.c4 < -3262;
+

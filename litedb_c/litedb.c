@@ -988,6 +988,7 @@ void read_second_part_from_stdin(char **input) {
         if (strlen(line) != 0) {
             strncpy((char *) context_push(&c, strlen(line)), line, strlen(line));
         }
+
         count--;
     }
 
@@ -1719,9 +1720,6 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
  * @param intermediate: the intermediate result of joining two relation
  * @param relation: some of the original relation
  */
-// todo: Sort BNLJ
-// qsort to quick sort
-// sort: (idx_row, row[col])
 void nested_loop_join(const struct_files *const loaded_files,
                       struct_data_frame *const intermediate,
                       struct_file *const relation,
@@ -1827,11 +1825,18 @@ void nested_loop_join(const struct_files *const loaded_files,
                 continue;
             }
 
+            int i = res - buffer_outer_loop;
+
+            // move i to the first duplicate element
+            while (i > 0 && buffer_outer_loop[i].number == buffer_outer_loop[i - 1].number) {
+                i--;
+            }
+
+
             // loop through buffer
             // i = index of elements that number == number_right
-            for (int i = res - buffer_outer_loop;
-                 (i < length_buffer_outer_loop && buffer_outer_loop[i].number == number_right);
-                 i++) {
+            for (; (i < length_buffer_outer_loop && buffer_outer_loop[i].number == number_right);
+                   i++) {
                 // push this row (based on original file) into stack
                 // copy index[row_inter] from inter, and concat it with index[row_relation]
                 size_t size_to_copy = inter_num_relations * sizeof(int);
@@ -1963,7 +1968,6 @@ void execute_selects(struct_files *const loaded_file, const struct_fourth_line *
  * @param tl
  * @param result
  */
-// did I miss relations without joins...
 void execute_joins(struct_files *const loaded_file, const struct_third_line *const tl, struct_data_frame *inter) {
     if (tl->length == 0) {
         ASSERT(0);
