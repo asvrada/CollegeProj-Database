@@ -1047,7 +1047,7 @@ typedef struct {
      * 0 1 0 2 1 1
      *
      * AB
-     * [01] [02] [11]
+     * [0 1] [0 2] [1 1]
      *
      * Which means:
      *     the first row of this df is comprised of row 0 from A and row 1 from B.
@@ -1675,7 +1675,9 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
  * @param intermediate: the intermediate result of joining two relation
  * @param relation: some of the original relation
  */
-// todo: ACDD
+// todo: Sort BNLJ
+// qsort to quick sort
+// sort: (idx_row, row[col])
 void nested_loop_join(const struct_files *const loaded_files,
                       struct_data_frame *const intermediate,
                       struct_file *const relation,
@@ -1702,10 +1704,9 @@ void nested_loop_join(const struct_files *const loaded_files,
         init_struct_data_frame_for_file(relation);
     }
 
-    // we use the stack again
+    // we use the stack again, to store join results (index of rows)
     struct_parse_context c;
     init_struct_parse_context(&c, NULL);
-
 
     int inter_offset_relation = findIndexOf(intermediate->relations,
                                             inter_num_relations,
@@ -1715,15 +1716,17 @@ void nested_loop_join(const struct_files *const loaded_files,
     // join->lhs.relation - 'A' = index of the file
     struct_file *const file_left = loaded_files->files + (join->lhs.relation - 'A');
 
-    // outer loop
     // todo: cache rows from outer loop?
-    for (int row_inter = 0; row_inter < intermediate->num_row; row_inter++) {
-        const int *const row_left = select_row_from_file(file_left,
-                                                         intermediate->index[
-                                                                 row_inter * inter_num_relations +
-                                                                 inter_offset_relation]);
+    // buffer for rows from outer loop
+    int *buffer_outer_loop = NULL;
 
+    // outer loop
+    for (int row_inter = 0; row_inter < intermediate->num_row; row_inter++) {
+        const int idx_row_left = intermediate->index[row_inter * inter_num_relations + inter_offset_relation];
+        const int *const row_left = select_row_from_file(file_left, idx_row_left);
         int number_left = row_left[join->lhs.column];
+
+        // todo: add pair (idx_row_left, number_left)
 
         // inner loop
         for (int row_relation = 0; row_relation < relation->df->num_row; row_relation++) {
@@ -1731,7 +1734,6 @@ void nested_loop_join(const struct_files *const loaded_files,
                                                               relation->df->index[row_relation]);
 
             // select number from given columns
-
             int number_right = row_right[join->rhs.column];
 
             if (number_left == number_right) {
@@ -1799,6 +1801,7 @@ void nested_loop_join_both_joined_before(const struct_files *const loaded_files,
     struct_file *const file_right = loaded_files->files + (join->rhs.relation - 'A');
 
     // for each row in inter
+    // todo: buffer before access
     for (int i = 0; i < intermediate->num_row; i++) {
         const int *const row_index = &intermediate->index[i * num_relations];
 
@@ -1848,7 +1851,6 @@ void nested_loop_join_both_joined_before(const struct_files *const loaded_files,
 void execute_selects(struct_files *const loaded_file, const struct_fourth_line *const fl) {
     for (int i = 0; i < fl->length; i++) {
         const struct_predicate *const predicate = &fl->predicates[i];
-
         char relation = predicate->lhs.relation;
 
         filter_data_given_predicate(&loaded_file->files[relation - 'A'], predicate);
@@ -1883,9 +1885,11 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
     for (int i = 0; i < tl->length; i++) {
         struct_join *join = &tl->joins[i];
 
+        const int index_left = findIndexOf(inter->relations, strlen(inter->relations), join->lhs.relation);
+        const int index_right = findIndexOf(inter->relations, strlen(inter->relations), join->rhs.relation);
+
         // if both joined before
-        if (-1 != findIndexOf(inter->relations, strlen(inter->relations), join->lhs.relation)
-            && -1 != findIndexOf(inter->relations, strlen(inter->relations), join->rhs.relation)) {
+        if (-1 != index_left && -1 != index_right) {
 
             nested_loop_join_both_joined_before(loaded_file, inter, join);
             continue;
@@ -1893,9 +1897,7 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
 
         // else if one of them is not joined before
         // we swap the order of join to make sure the lhs one is joined before
-        if (-1 == findIndexOf(inter->relations, strlen(inter->relations), join->lhs.relation)) {
-            ASSERT(-1 != findIndexOf(inter->relations, strlen(inter->relations), join->rhs.relation));
-
+        if (-1 == index_left) {
             // swap join lhs and rhs
             struct_relation_column tmp = join->lhs;
             join->lhs = join->rhs;
@@ -1955,21 +1957,23 @@ void execute_sums(struct_files *const loaded_file,
  *
  * @param query
  */
-#define DEBUG 1
-
 void execute(struct_files *const loaded_file, const struct_query *const query) {
+    // select
     execute_selects(loaded_file, &query->fourth);
 
     struct_data_frame result;
 
+    // join
     execute_joins(loaded_file, &query->third, &result);
 
     size_t size_ans = query->first.length * sizeof(int64_t);
     int64_t *ans = (int64_t *) malloc(size_ans);
     memset(ans, 0, size_ans);
 
+    // sum
     execute_sums(loaded_file, &query->first, &result, ans);
 
+    // output result
     for (int i = 0; i < query->first.length; i++) {
         if (result.num_row != 0) {
             printf("%" PRId64, ans[i]);
@@ -1980,6 +1984,7 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     }
     puts("");
 
+    // clean up
     free_struct_data_frame(&result);
     free(ans);
 }
