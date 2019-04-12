@@ -1779,19 +1779,36 @@ void nested_loop_join(const struct_files *const loaded_files,
             // select number from given columns
             int number_right = row_right[join->rhs.column];
 
+            struct_number_row key;
+            key.number = number_right;
+            // doesn't matter
+            key.row = 0;
+
+            // use binary search to find number right
+            struct_number_row const *res = bsearch(&key,
+                                                   buffer_outer_loop,
+                                                   length_buffer_outer_loop,
+                                                   sizeof(struct_number_row),
+                                                   cmp_struct_number_row);
+
+            if (res == NULL) {
+                continue;
+            }
+
             // loop through buffer
-            for (int i = 0; i < length_buffer_outer_loop; i++) {
-                if (buffer_outer_loop[i].number == number_right) {
-                    // push this row (based on original file) into stack
-                    // copy index[row_inter] from inter, and concat it with index[row_relation]
-                    size_t size_to_copy = inter_num_relations * sizeof(int);
+            // i = index of elements that number == number_right
+            for (int i = res - buffer_outer_loop;
+                 (i < length_buffer_outer_loop && buffer_outer_loop[i].number == number_right);
+                 i++) {
+                // push this row (based on original file) into stack
+                // copy index[row_inter] from inter, and concat it with index[row_relation]
+                size_t size_to_copy = inter_num_relations * sizeof(int);
 
-                    memcpy(context_push(&c, size_to_copy),
-                           &(intermediate->index[buffer_outer_loop[i].row * inter_num_relations]),
-                           size_to_copy);
+                memcpy(context_push(&c, size_to_copy),
+                       &(intermediate->index[buffer_outer_loop[i].row * inter_num_relations]),
+                       size_to_copy);
 
-                    *(int *) context_push(&c, sizeof(int)) = relation->df->index[row_relation];
-                }
+                *(int *) context_push(&c, sizeof(int)) = relation->df->index[row_relation];
             }
         }
 
