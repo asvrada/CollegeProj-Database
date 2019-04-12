@@ -609,30 +609,37 @@ static void test_predicate_simple_2() {
 }
 
 static void test_predicate_combined() {
+    /*
+     * -- 354
+SELECT count(*)
+FROM C
+WHERE C.c2 > 3854137 AND C.c4 < -3262;
+     */
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file('A', "../data/xxxs/A.csv", &file);
+    load_csv_file('C', "../data/xs/C.csv", &file);
 
     struct_predicate predicate1;
-    predicate1.lhs.relation = 'A';
-    predicate1.lhs.column = 0;
-    predicate1.operator = EQUAL;
-    predicate1.rhs = 4422;
+    predicate1.lhs.relation = 'C';
+    predicate1.lhs.column = 2;
+    predicate1.operator = GREATER_THAN;
+    predicate1.rhs = 3854137;
 
     struct_predicate predicate2;
-    predicate2.lhs.relation = 'A';
-    predicate2.lhs.column = 1;
-    predicate2.operator = GREATER_THAN;
-    predicate2.rhs = 5000;
+    predicate2.lhs.relation = 'C';
+    predicate2.lhs.column = 4;
+    predicate2.operator = LESS_THAN;
+    predicate2.rhs = -3262;
 
     filter_data_given_predicate(&file, &predicate1);
     filter_data_given_predicate(&file, &predicate2);
 
-    // what if we select from already empty file?
-    filter_data_given_predicate(&file, &predicate2);
+    EXPECT_EQ_INT(354, file.df->num_row);
 
-    EXPECT_EQ_INT(0, file.df->num_row);
+    // 17
+    EXPECT_EQ_INT(17, file.df->index[0]);
+    EXPECT_EQ_INT(33, file.df->index[1]);
 
     free_struct_file(&file);
 }

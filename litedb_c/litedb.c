@@ -1692,7 +1692,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
         }
 
         // copy index of row
-        df->index[slow] = fast;
+        df->index[slow] = df->index[fast];
         slow++;
     }
 
@@ -2063,7 +2063,6 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     struct_data_frame result;
 
     // join
-    // todo: bug: sometimes the number of rows is wrong
     execute_joins(loaded_file, &query->third, &result);
 
     size_t size_ans = query->first.length * sizeof(int64_t);
