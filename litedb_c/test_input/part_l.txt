@@ -1,0 +1,6 @@
+../data/l/A.csv,../data/l/C.csv,../data/l/B.csv,../data/l/Q.csv,../data/l/F.csv,../data/l/G.csv,../data/l/P.csv,../data/l/E.csv,../data/l/D.csv,../data/l/I.csv,../data/l/H.csv,../data/l/J.csv,../data/l/K.csv,../data/l/O.csv,../data/l/N.csv,../data/l/L.csv,../data/l/M.csv
+1
+SELECT SUM(A.c20), SUM(A.c16), SUM(A.c10), SUM(A.c38)
+FROM A, H, D, K
+WHERE A.c7 = H.c0 AND A.c3 = D.c0 AND A.c10 = K.c0
+AND A.c35 = 6831;

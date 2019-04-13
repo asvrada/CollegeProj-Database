@@ -2127,6 +2127,8 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     // join
     execute_joins(loaded_file, &query->third, &result);
 
+    int count_join_row = result.num_row;
+
     size_t size_ans = query->first.length * sizeof(int64_t);
     int64_t *ans = (int64_t *) malloc(size_ans);
     memset(ans, 0, size_ans);
