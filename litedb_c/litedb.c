@@ -1615,6 +1615,26 @@ int cmp_struct_number_row_bsearch(const void *p1, const void *p2) {
     }
 }
 
+typedef struct {
+    // index to rows in dataframe.index
+    int row_df;
+    // index to rows in file
+    int row_file;
+} struct_df_row_file_row;
+
+int cmp_struct_df_file_qsort(const void *p1, const void *p2) {
+    const struct_df_row_file_row *a = (const struct_df_row_file_row *) p1;
+    const struct_df_row_file_row *b = (const struct_df_row_file_row *) p2;
+
+    if (a->row_file < b->row_file) {
+        return -1;
+    } else if (a->row_file > b->row_file) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
 int findIndexOf(const char *const input, int length, char val) {
     for (int i = 0; i < length; i++) {
         if (input[i] == val) {
@@ -1783,14 +1803,29 @@ void nested_loop_join(const struct_files *const loaded_files,
     int length_buffer_outer_loop = 0;
 
     // outer loop
+    // a struct that represents pair of (row_df, row_file)
+    struct_df_row_file_row *intermediate_index_row =
+            (struct_df_row_file_row *) malloc(intermediate->num_row * sizeof(struct_df_row_file_row));
+
+    // push all rows into it
     for (int row_inter = 0; row_inter < intermediate->num_row; row_inter++) {
-        const int idx_row_left = intermediate->index[row_inter * inter_num_relations + inter_offset_relation];
+        intermediate_index_row[row_inter].row_df = row_inter;
+        intermediate_index_row[row_inter].row_file = intermediate->index[row_inter * inter_num_relations +
+                                                                         inter_offset_relation];
+    }
+
+    // sort row_file so the file is accessed in a sequential order
+    qsort(intermediate_index_row, intermediate->num_row, sizeof(struct_df_row_file_row), cmp_struct_df_file_qsort);
+
+    for (int row_inter = 0; row_inter < intermediate->num_row; row_inter++) {
+        const int idx_row_left = intermediate_index_row[row_inter].row_file;
+
         const int *const row_left = select_row_from_file(file_left, idx_row_left);
         int number_left = row_left[join->lhs.column];
 
         // new pair into outer buffer
         buffer_outer_loop[length_buffer_outer_loop].number = number_left;
-        buffer_outer_loop[length_buffer_outer_loop].row = row_inter;
+        buffer_outer_loop[length_buffer_outer_loop].row = intermediate_index_row[row_inter].row_df;
         length_buffer_outer_loop++;
 
         if (length_buffer_outer_loop < max_length_buffer_outer_loop) {
@@ -1827,11 +1862,11 @@ void nested_loop_join(const struct_files *const loaded_files,
 
             int i = res - buffer_outer_loop;
 
+            // todo: make this efficient
             // move i to the first duplicate element
             while (i > 0 && buffer_outer_loop[i].number == buffer_outer_loop[i - 1].number) {
                 i--;
             }
-
 
             // loop through buffer
             // i = index of elements that number == number_right
@@ -1880,6 +1915,7 @@ void nested_loop_join(const struct_files *const loaded_files,
 
     free_struct_parse_context(&c);
     free(buffer_outer_loop);
+    free(intermediate_index_row);
 }
 
 
@@ -2013,6 +2049,20 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
     }
 }
 
+int cmp_int_qsort(const void *p1, const void *p2) {
+    return (*(int *) p1 - *(int *) p2);
+//    const int *a = (const int *) p1;
+//    const int *b = (const int *) p2;
+//
+//    if (a < b) {
+//        return -1;
+//    } else if (a > b) {
+//        return 1;
+//    } else {
+//        return 0;
+//    }
+}
+
 /**
  * This will output the final result
  *
@@ -2026,29 +2076,37 @@ void execute_sums(struct_files *const loaded_file,
                   int64_t *ans) {
     int num_relations = strlen(result->relations);
 
-    // for each row in result
-    for (int i = 0; i < result->num_row; i++) {
-        // ABDC
-        int *rows = &result->index[num_relations * i];
+    int *sorted_rows = (int *) malloc(result->num_row * sizeof(int));
+    memset(sorted_rows, 0, result->num_row * sizeof(int));
 
-        // for each sum
-        for (int col = 0; col < fl->length; col++) {
-            struct_relation_column *rc = &fl->sums[col];
-            // find relation
-            char relation = rc->relation;
-            struct_file *file = &loaded_file->files[relation - 'A'];
+    // query for each sum, and sort file rows
+    for (int col = 0; col < fl->length; col++) {
+        struct_relation_column *rc = &fl->sums[col];
+        char relation = rc->relation;
+        // find the index of this relation in the result
+        int index = findIndexOf(result->relations, strlen(result->relations), relation);
 
-            // find the index of this relation in the result
-            int index = findIndexOf(result->relations, strlen(result->relations), relation);
-            int row = rows[index];
+        // create an array to store file rows
+        for (int i = 0; i < result->num_row; i++) {
+            int *rows = &result->index[num_relations * i];
+            sorted_rows[i] = rows[index];
+        }
 
+        qsort(sorted_rows, result->num_row, sizeof(int), cmp_int_qsort);
+
+        // and select row from file
+        struct_file *file = &loaded_file->files[relation - 'A'];
+
+        for (int i = 0; i < result->num_row; i++) {
             // find value
-            const int *tmp_row = select_row_from_file(file, row);
+            const int *tmp_row = select_row_from_file(file, sorted_rows[i]);
 
             // accumulate result
             ans[col] += tmp_row[rc->column];
         }
     }
+
+    free(sorted_rows);
 }
 
 /**
