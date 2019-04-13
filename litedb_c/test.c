@@ -74,6 +74,38 @@ static void test_load_csv_file_xs() {
     free_struct_file(&file);
 }
 
+static void test_load_csv_file_l_D() {
+    struct_file file;
+    init_struct_file(&file);
+
+    load_csv_file('D', "../data/l/D.csv", &file);
+
+    EXPECT_EQ_INT(3495, file.num_row);
+
+    const int *row = select_row_from_file(&file, 3494);
+
+    EXPECT_EQ_INT(3494, row[0]);
+    EXPECT_EQ_INT(-10, row[1]);
+
+    free_struct_file(&file);
+}
+
+static void test_load_csv_file_l_F() {
+    struct_file file;
+    init_struct_file(&file);
+
+    load_csv_file('F', "../data/l/F.csv", &file);
+
+    EXPECT_EQ_INT(2041, file.num_row);
+
+    const int *row = select_row_from_file(&file, 2040);
+
+    EXPECT_EQ_INT(2040, row[0]);
+    EXPECT_EQ_INT(25, row[1]);
+
+    free_struct_file(&file);
+}
+
 static void test_load_csv_files(const char *path) {
     // redirect stdin
     freopen(path, "r", stdin);
@@ -102,6 +134,8 @@ static void test_load_csv_files(const char *path) {
 static void test_dataloader() {
     test_load_csv_file();
     test_load_csv_file_xs();
+    test_load_csv_file_l_D();
+    test_load_csv_file_l_F();
 //    test_load_csv_files("./test_input/first_part_xs.txt");
 //    test_load_csv_files("./test_input/first_part_m.txt");
 }
@@ -810,11 +844,11 @@ static void test_main() {
 int main() {
     // test assert
     ASSERT(1);
-//    test_dataloader();
-//    test_parse();
-//    test_predicates();
-//    test_join();
-    test_main();
+    test_dataloader();
+    test_parse();
+    test_predicates();
+    test_join();
+//    test_main();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;

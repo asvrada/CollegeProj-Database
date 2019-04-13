@@ -3,5 +3,6 @@
 # python3 main.py
 # ./a.out
 
-./litedb
+./litedb_c/cmake-build-debug/litedb
+# ./litedb
 # python dump.py

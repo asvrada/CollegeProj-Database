@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <string.h>
 #include <inttypes.h>
+#include <ctype.h>
 
 // runtime assert
 #define ASSERT(val) \
@@ -356,7 +357,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
     c->input++;
 
     // parse column
-    // parse 'c' at the beginning of column
+    // parse 'C' at the beginning of column
     c->input++;
 
     head = c->top;
@@ -1004,6 +1005,11 @@ void read_second_part_from_stdin(char **input) {
     memcpy(*input, tmp_input, len);
     (*input)[len] = 0;
 
+    // convert to upper case
+    for (int i = 0; i < len; i++) {
+        (*input)[i] = toupper((*input)[i]);
+    }
+
     free_struct_parse_context(&c);
 }
 
@@ -1284,7 +1290,7 @@ void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, stru
     size_t size_buffer = size * count;
 
     // manual buffer is full
-    if (manual_buffer->cur_size + size_buffer >= manual_buffer->max_size) {
+    if (manual_buffer->cur_size + size_buffer > manual_buffer->max_size) {
         // we write the entire block into disk, so it's page aligned
         fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->max_size, stream);
 
@@ -1666,6 +1672,10 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
         init_struct_data_frame_for_file(file);
     }
 
+    if (file->df->num_row == 0) {
+        return;
+    }
+
     struct_data_frame *const df = file->df;
     const int row = df->num_row;
 
@@ -1724,7 +1734,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
     // if no rows selected, empty the index
     if (df->num_row == 0) {
         free(df->index);
-        df->index = 0;
+        df->index = NULL;
     } else {
         // realloc memory for df->index
         df->index = (int *) realloc(df->index, df->num_row * sizeof(int));
@@ -1751,14 +1761,13 @@ void nested_loop_join(const struct_files *const loaded_files,
     // The new relations after join //
     //////////////////////////////////
     // first 1: size of relation
-    // second 1: make room for ending \0
-    size_t length_joined_relations = strlen(intermediate->relations) + 1 + 1;
-    // the name of the new relations, remeber to free the one from inter and assign this to it
-    char *joined_relations = (char *) malloc(length_joined_relations * sizeof(char));
-
     // number of relations, or number of index per row, of intermediate dataframe
     int inter_num_relations = strlen(intermediate->relations);
 
+    // second 1: make room for ending \0
+    size_t length_joined_relations = inter_num_relations + 1 + 1;
+    // the name of the new relations, remeber to free the one from inter and assign this to it
+    char *joined_relations = (char *) malloc(length_joined_relations * sizeof(char));
     // assign value
     memcpy(joined_relations, intermediate->relations, inter_num_relations);
     joined_relations[length_joined_relations - 2] = relation->relation;
@@ -1804,6 +1813,7 @@ void nested_loop_join(const struct_files *const loaded_files,
     int length_buffer_outer_loop = 0;
 
     // outer loop
+    // sort the row_file
     // a struct that represents pair of (row_df, row_file)
     struct_df_row_file_row *intermediate_index_row =
             (struct_df_row_file_row *) malloc(intermediate->num_row * sizeof(struct_df_row_file_row));
@@ -1834,7 +1844,7 @@ void nested_loop_join(const struct_files *const loaded_files,
             continue;
         }
 
-        // when buffer is full, sort it
+        // when buffer is full, sort it by number
         qsort(buffer_outer_loop, length_buffer_outer_loop, sizeof(struct_number_row), cmp_struct_number_row_qsort);
 
         // inner loop
@@ -1998,6 +2008,21 @@ void execute_selects(struct_files *const loaded_file, const struct_fourth_line *
     }
 }
 
+// todo: delete
+void print_join_result(struct_files *const loaded_file, struct_data_frame *inter) {
+    int length = strlen(inter->relations);
+    // for each join result, print first number from each relation
+    for (int i = 0; i < inter->num_row; i++) {
+        int *row = &inter->index[i * length];
+
+        for (int j = 0; j < length; j++) {
+            printf("%d ", row[j]);
+        }
+
+        printf("\n");
+    }
+}
+
 /**
  * Execute all the joins, and assign the result to *result
  *
@@ -2052,16 +2077,6 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
 
 int cmp_int_qsort(const void *p1, const void *p2) {
     return (*(int *) p1 - *(int *) p2);
-//    const int *a = (const int *) p1;
-//    const int *b = (const int *) p2;
-//
-//    if (a < b) {
-//        return -1;
-//    } else if (a > b) {
-//        return 1;
-//    } else {
-//        return 0;
-//    }
 }
 
 /**
@@ -2110,6 +2125,18 @@ void execute_sums(struct_files *const loaded_file,
     free(sorted_rows);
 }
 
+// todo: delete
+void print_rows(struct_file *file, struct_data_frame *df) {
+    printf("There are %d rows.\n", df->num_row);
+
+    int length = strlen(df->relations);
+
+    for (int i = 0; i < df->num_row; i++) {
+        const int *row = select_row_from_file(file, df->index[i * length]);
+        printf("# %d: row %d\n", i, row[0]);
+    }
+}
+
 /**
  * Execute the query
  *
@@ -2127,8 +2154,6 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
 
     // join
     execute_joins(loaded_file, &query->third, &result);
-
-    int count_join_row = result.num_row;
 
     size_t size_ans = query->first.length * sizeof(int64_t);
     int64_t *ans = (int64_t *) malloc(size_ans);

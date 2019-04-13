@@ -3,5 +3,5 @@
 SELECT SUM(A.c20), SUM(A.c16), SUM(A.c10), SUM(A.c38)
 FROM A, H, D, K
 WHERE A.c7 = H.c0 AND A.c3 = D.c0 AND A.c10 = K.c0
-AND A.c35 = 6831;
+and A.c35 = 6831;
 
