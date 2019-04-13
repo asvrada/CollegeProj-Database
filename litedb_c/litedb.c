@@ -1385,7 +1385,7 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
 
     // freed at the end of this function
     FILE *file_input = fopen(file, "r");
-    FILE *file_binary = fopen(path_file_binary, "wb+");
+    FILE *file_binary = fopen(path_file_binary, "wb");
     // todo: file_meta
     // FILE *file_meta
 
@@ -1519,15 +1519,16 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
 
     assert(size_buffer_row == 0);
 
-
     // write whats left inside output buffer to file
     if (fwrite_buffer.cur_size != 0) {
         fwrite_buffered_flush(&fwrite_buffer, file_binary);
     }
 
+    fclose(file_binary);
+
     // assign value to loaded_file
     loaded_file->relation = relation;
-    loaded_file->file_binary.file_binary = file_binary;
+    loaded_file->file_binary.file_binary = fopen(path_file_binary, "r");
     loaded_file->num_col = num_col;
     loaded_file->num_row = num_row;
 

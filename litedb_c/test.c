@@ -765,7 +765,7 @@ static void test_join() {
 }
 
 static void test_main() {
-    freopen("./test_input/full_xs.txt", "r", stdin);
+    freopen("./test_input/full_l.txt", "r", stdin);
 
     char *first_part = NULL;
     read_first_part_from_stdin(&first_part);
@@ -810,10 +810,10 @@ static void test_main() {
 int main() {
     // test assert
     ASSERT(1);
-    test_dataloader();
-    test_parse();
-    test_predicates();
-    test_join();
+//    test_dataloader();
+//    test_parse();
+//    test_predicates();
+//    test_join();
     test_main();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
