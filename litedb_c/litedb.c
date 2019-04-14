@@ -7,6 +7,7 @@
 #ifndef LITE_DB_LITEDB_C
 #define LITE_DB_LITEDB_C
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
@@ -1033,7 +1034,7 @@ Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20
 
 #define SIZE_PAGE 4096
 #define SIZE_BUFFER (2 * SIZE_PAGE)
-#define NUM_BUFFER_PER_RELATION 4096
+#define NUM_BUFFER_PER_RELATION 8192
 
 /**
  * struct that stores intermediate table (after join, after predicates)
@@ -1953,6 +1954,7 @@ void nested_loop_join_both_joined_before(const struct_files *const loaded_files,
 
     // for each row in inter
     // todo: buffer before access
+    // todo: sort
     for (int i = 0; i < intermediate->num_row; i++) {
         const int *const row_index = &intermediate->index[i * num_relations];
 
@@ -2005,21 +2007,6 @@ void execute_selects(struct_files *const loaded_file, const struct_fourth_line *
         char relation = predicate->lhs.relation;
 
         filter_data_given_predicate(&loaded_file->files[relation - 'A'], predicate);
-    }
-}
-
-// todo: delete
-void print_join_result(struct_files *const loaded_file, struct_data_frame *inter) {
-    int length = strlen(inter->relations);
-    // for each join result, print first number from each relation
-    for (int i = 0; i < inter->num_row; i++) {
-        int *row = &inter->index[i * length];
-
-        for (int j = 0; j < length; j++) {
-            printf("%d ", row[j]);
-        }
-
-        printf("\n");
     }
 }
 
@@ -2123,18 +2110,6 @@ void execute_sums(struct_files *const loaded_file,
     }
 
     free(sorted_rows);
-}
-
-// todo: delete
-void print_rows(struct_file *file, struct_data_frame *df) {
-    printf("There are %d rows.\n", df->num_row);
-
-    int length = strlen(df->relations);
-
-    for (int i = 0; i < df->num_row; i++) {
-        const int *row = select_row_from_file(file, df->index[i * length]);
-        printf("# %d: row %d\n", i, row[0]);
-    }
 }
 
 /**
