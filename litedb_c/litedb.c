@@ -2192,15 +2192,15 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     free(ans);
 
 #ifdef DEBUG_PROFILING
-    fprintf(stderr, "Time:\n\tThis query: %ld\n\tTotal: %ld\nBuffer (this query):\n\tMiss: %ld\n\tTotal: %ld\nBuffer (total):\n\tMiss: %ld\n\tTotal: %ld\n",
+    fprintf(stderr,
+            "                 Query     Total\nTime        %10ld%10ld\nBuffer miss %10ld%10ld\nBuffer      %10ld%10ld\n\n",
             time_query,
             time_total,
             count_buffer_total_query - count_buffer_hit_query,
-            count_buffer_total_query,
             count_buffer_total - count_buffer_hit_total,
+            count_buffer_total_query,
             count_buffer_total);
 #endif
-
 }
 
 #endif //LITE_DB_LITEDB_C
