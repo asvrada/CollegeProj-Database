@@ -1,7 +1,87 @@
 ../data/m/A.csv,../data/m/C.csv,../data/m/B.csv,../data/m/F.csv,../data/m/G.csv,../data/m/P.csv,../data/m/E.csv,../data/m/D.csv,../data/m/I.csv,../data/m/H.csv,../data/m/J.csv,../data/m/K.csv,../data/m/O.csv,../data/m/N.csv,../data/m/L.csv,../data/m/M.csv
-1
+17
 SELECT SUM(A.c26), SUM(A.c22), SUM(A.c43), SUM(A.c25)
 FROM A, J, B, K
 WHERE A.c9 = J.c0 AND A.c1 = B.c0 AND A.c10 = K.c0
 AND A.c16 > -4899;
+
+SELECT SUM(A.c21), SUM(A.c24)
+FROM A, J, G, D
+WHERE A.c9 = J.c0 AND A.c6 = G.c0 AND A.c3 = D.c0
+AND A.c40 < -4988;
+
+SELECT SUM(A.c22), SUM(A.c47)
+FROM A, B, C, E
+WHERE A.c1 = B.c0 AND A.c2 = C.c0 AND A.c4 = E.c0
+AND A.c27 = 6207;
+
+SELECT SUM(A.c14), SUM(A.c30)
+FROM A, G, J, B
+WHERE A.c6 = G.c0 AND A.c9 = J.c0 AND A.c1 = B.c0
+AND A.c27 > 7281;
+
+SELECT SUM(A.c45), SUM(A.c47)
+FROM A, G, K, I
+WHERE A.c6 = G.c0 AND A.c10 = K.c0 AND A.c8 = I.c0
+AND A.c34 = -3694;
+
+SELECT SUM(A.c38), SUM(A.c48), SUM(A.c49)
+FROM A, G, I, H, K, E, D
+WHERE A.c6 = G.c0 AND A.c8 = I.c0 AND A.c7 = H.c0 AND A.c10 = K.c0 AND A.c4 = E.c0 AND A.c3 = D.c0
+AND A.c33 = 6625 AND K.c3 > 0;
+
+SELECT SUM(A.c47), SUM(A.c46), SUM(A.c28), SUM(A.c37)
+FROM A, D, E, I, K, B
+WHERE A.c3 = D.c0 AND A.c4 = E.c0 AND A.c8 = I.c0 AND A.c10 = K.c0 AND A.c1 = B.c0
+AND A.c28 = 1302 AND E.c1 > 0;
+
+SELECT SUM(A.c22), SUM(A.c44), SUM(A.c27)
+FROM A, I, F, K, C, B, G
+WHERE A.c8 = I.c0 AND A.c5 = F.c0 AND A.c10 = K.c0 AND A.c2 = C.c0 AND A.c1 = B.c0 AND A.c6 = G.c0
+AND A.c40 > 4380 AND B.c1 > 0;
+
+SELECT SUM(A.c35), SUM(A.c24)
+FROM A, K, F, G, J, E, B, I
+WHERE A.c10 = K.c0 AND A.c5 = F.c0 AND A.c6 = G.c0 AND A.c9 = J.c0 AND A.c4 = E.c0 AND A.c1 = B.c0 AND A.c8 = I.c0
+AND A.c17 = 2189 AND B.c3 > 0;
+
+SELECT SUM(A.c43), SUM(A.c23), SUM(A.c45)
+FROM A, E, H, C, J, D, B
+WHERE A.c4 = E.c0 AND A.c7 = H.c0 AND A.c2 = C.c0 AND A.c9 = J.c0 AND A.c3 = D.c0 AND A.c1 = B.c0
+AND A.c49 = -3113 AND H.c4 > 0;
+
+SELECT SUM(A.c27), SUM(A.c29), SUM(A.c17), SUM(A.c40)
+FROM A, D, K, B, G, I, E, J
+WHERE A.c3 = D.c0 AND A.c10 = K.c0 AND A.c1 = B.c0 AND A.c6 = G.c0 AND A.c8 = I.c0 AND A.c4 = E.c0 AND A.c9 = J.c0
+AND A.c49 < -888 AND A.c48 < 0 AND A.c35 > 0 AND A.c27 > 1000 AND D.c1 > 0;
+
+SELECT SUM(A.c36), SUM(A.c23), SUM(A.c10), SUM(A.c45)
+FROM A, F, H, B, J, G, K, C, O, L, N, M
+WHERE A.c5 = F.c0 AND A.c7 = H.c0 AND A.c1 = B.c0 AND A.c9 = J.c0 AND A.c6 = G.c0 AND A.c10 = K.c0 AND A.c2 = C.c0 AND C.c1 = O.c0 AND F.c1 = L.c0 AND F.c1 = N.c0 AND K.c1 = M.c0
+AND A.c41 = 3177 AND N.c1 > 0;
+
+SELECT SUM(A.c24)
+FROM A, B, F, I, H, G, C, L, N, O, P
+WHERE A.c1 = B.c0 AND A.c5 = F.c0 AND A.c8 = I.c0 AND A.c7 = H.c0 AND A.c6 = G.c0 AND A.c2 = C.c0 AND H.c1 = L.c0 AND H.c1 = N.c0 AND G.c1 = O.c0 AND C.c1 = P.c0
+AND A.c40 < -2962 AND L.c4 > 0 AND G.c2 = 48 AND I.c2 = 9;
+
+SELECT SUM(A.c24)
+FROM A, F, K, D, J, I, M, L, N, P
+WHERE A.c5 = F.c0 AND A.c10 = K.c0 AND A.c3 = D.c0 AND A.c9 = J.c0 AND A.c8 = I.c0 AND K.c1 = M.c0 AND J.c1 = L.c0 AND F.c1 = N.c0 AND J.c1 = P.c0
+AND A.c13 = -3465 AND M.c4 > 0;
+
+SELECT SUM(A.c13)
+FROM A, C, J, G, B, F, I, D, L, N
+WHERE A.c2 = C.c0 AND A.c9 = J.c0 AND A.c6 = G.c0 AND A.c1 = B.c0 AND A.c5 = F.c0 AND A.c8 = I.c0 AND A.c3 = D.c0 AND C.c1 = L.c0 AND G.c1 = N.c0
+AND A.c33 = 9101 AND L.c4 > 0;
+
+SELECT SUM(A.c26), SUM(A.c37), SUM(A.c45), SUM(A.c18)
+FROM A, E, I, F, D, B, P, O
+WHERE A.c4 = E.c0 AND A.c8 = I.c0 AND A.c5 = F.c0 AND A.c3 = D.c0 AND A.c1 = B.c0 AND I.c1 = P.c0 AND E.c1 = O.c0
+AND A.c17 = -4437 AND O.c4 > 0;
+
+SELECT SUM(A.c28)
+FROM A, K, F, I, J, C, D, H, L, M, P
+WHERE A.c10 = K.c0 AND A.c5 = F.c0 AND A.c8 = I.c0 AND A.c9 = J.c0 AND A.c2 = C.c0 AND A.c3 = D.c0 AND A.c7 = H.c0 AND F.c1 = L.c0 AND K.c1 = M.c0 AND C.c1 = P.c0
+AND A.c24 = 1881 AND P.c3 > 0;
 

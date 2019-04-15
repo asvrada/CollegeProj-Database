@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(litedb_test C)
+project(litedb C)
 
 set(CMAKE_C_STANDARD 99)
 

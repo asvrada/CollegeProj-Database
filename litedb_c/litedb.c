@@ -7,6 +7,20 @@
 #ifndef LITE_DB_LITEDB_C
 #define LITE_DB_LITEDB_C
 
+//#define DEBUG_PROFILING 1
+
+#ifdef DEBUG_PROFILING
+#include <time.h>
+static long time_query = 0;
+static long time_total = 0;
+// number of times buffer hit during a query
+static long count_buffer_hit_query = 0;
+static long count_buffer_total_query = 0;
+// number of times buffer hit throughout entire program
+static long count_buffer_hit_total = 0;
+static long count_buffer_total = 0;
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -1327,18 +1341,31 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
 const int *const select_row_from_file(struct_file *const file, const int row) {
     ASSERT(file->num_row > row);
 
+#ifdef DEBUG_PROFILING
+    count_buffer_total++;
+    count_buffer_total_query++;
+#endif
+
     // 1. calculate offset in bytes to read from disk
     const int byte_per_row = file->num_col * sizeof(int);
     const int row_per_buffer = SIZE_BUFFER / byte_per_row;
 
     // if buffered
     if (file->file_binary.row_start <= row && row < file->file_binary.row_end) {
+#ifdef DEBUG_PROFILING
+        count_buffer_hit_query++;
+        count_buffer_hit_total++;
+#endif
         // offset (in number of buffers) from the beginning of pages
         int offset_num_buffer = (row - file->file_binary.row_start) / row_per_buffer;
 
         return (int *) ((char *) file->file_binary.pages + (offset_num_buffer * SIZE_BUFFER)) +
                (row - file->file_binary.row_start - offset_num_buffer * row_per_buffer) * file->num_col;
     }
+
+#ifdef DEBUG_PROFILING
+    time_t start = time(NULL);
+#endif
 
     // offset (in number of buffers) from the beginning of file
     int offset_num_buffer = row / row_per_buffer;
@@ -1365,6 +1392,12 @@ const int *const select_row_from_file(struct_file *const file, const int row) {
     if (size_read < NUM_BUFFER_PER_RELATION * SIZE_BUFFER) {
         file->file_binary.row_end = file->file_binary.row_start + size_read / SIZE_BUFFER * row_per_buffer;
     }
+
+#ifdef DEBUG_PROFILING
+    long time_spend = time(NULL) - start;
+    time_query += time_spend;
+    time_total += time_spend;
+#endif
 
     return file->file_binary.pages +
            (row - file->file_binary.row_start) * file->num_col;
@@ -2122,6 +2155,12 @@ void execute_sums(struct_files *const loaded_file,
  * @param query
  */
 void execute(struct_files *const loaded_file, const struct_query *const query) {
+#ifdef DEBUG_PROFILING
+    time_query = 0;
+    count_buffer_hit_query = 0;
+    count_buffer_total_query = 0;
+#endif
+
     // select
     execute_selects(loaded_file, &query->fourth);
 
@@ -2151,6 +2190,17 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     // clean up
     free_struct_data_frame(&result);
     free(ans);
+
+#ifdef DEBUG_PROFILING
+    fprintf(stderr, "Time:\n\tThis query: %ld\n\tTotal: %ld\nBuffer (this query):\n\tMiss: %ld\n\tTotal: %ld\nBuffer (total):\n\tMiss: %ld\n\tTotal: %ld\n",
+            time_query,
+            time_total,
+            count_buffer_total_query - count_buffer_hit_query,
+            count_buffer_total_query,
+            count_buffer_total - count_buffer_hit_total,
+            count_buffer_total);
+#endif
+
 }
 
 #endif //LITE_DB_LITEDB_C

@@ -24,7 +24,7 @@ do {\
 EXPECT_EQ_BASE(sizeof(expect) - 1 == alength && memcmp(expect, actual, alength + 1) == 0, expect, actual, "%s")
 
 #define EXPECT_RELATION_COLUMN(rc, re, col) \
-do { \
+do {\
     EXPECT_EQ_CHAR((re), (rc)->relation);\
     EXPECT_EQ_INT((col), (rc)->column);\
 } while (0)

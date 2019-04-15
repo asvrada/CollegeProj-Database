@@ -1,7 +1,152 @@
 ../data/xs/A.csv,../data/xs/C.csv,../data/xs/B.csv,../data/xs/F.csv,../data/xs/E.csv,../data/xs/D.csv
-1
+30
+SELECT SUM(D.c2), SUM(A.c29), SUM(C.c1)
+FROM A, B, C, D
+WHERE A.c2 = C.c0 AND A.c1 = B.c0 AND A.c3 = D.c0
+AND A.c29 = 5376;
+
+SELECT SUM(E.c1), SUM(E.c3), SUM(F.c3)
+FROM A, D, E, F
+WHERE D.c1 = F.c0 AND F.c1 = E.c1 AND A.c3 = D.c0
+AND E.c0 < -3 AND F.c3 < 0;
+
+SELECT SUM(A.c34), SUM(D.c3)
+FROM A, C, D
+WHERE A.c2 = C.c0 AND C.c2 = D.c2 AND A.c3 = D.c0
+AND A.c30 > 7602;
+
+SELECT SUM(B.c0), SUM(B.c1), SUM(D.c2), SUM(D.c3)
+FROM A, B, C, D
+WHERE A.c1 = B.c0 AND A.c3 = D.c0 AND C.c2 = D.c2
+AND B.c2 = -1257;
+
+SELECT SUM(A.c1), SUM(D.c4)
+FROM A, C, D
+WHERE A.c2 = C.c0 AND C.c2 = D.c2 AND A.c3 = D.c0
+AND A.c33 = -5508;
+
+SELECT SUM(F.c4), SUM(D.c2)
+FROM C, D, E, F
+WHERE F.c1 = E.c1 AND D.c1 = F.c0 AND C.c2 = D.c2
+AND C.c2 > 2329720;
+
+SELECT SUM(C.c2)
+FROM A, C, E, F
+WHERE C.c1 = E.c0 AND A.c2 = C.c0 AND F.c1 = E.c1
+AND F.c1 > 706156;
+
+SELECT SUM(D.c0), SUM(D.c3), SUM(A.c7), SUM(E.c0)
+FROM A, D, E, F
+WHERE D.c1 = F.c0 AND F.c1 = E.c1 AND A.c3 = D.c0
+AND D.c2 = 97;
+
+SELECT SUM(C.c0), SUM(C.c1)
+FROM A, C, D, E
+WHERE A.c3 = D.c0 AND A.c2 = C.c0 AND C.c1 = E.c0
+AND A.c39 < -2482;
+
+SELECT SUM(F.c4), SUM(A.c43), SUM(F.c2)
+FROM A, C, D, F
+WHERE C.c2 = D.c2 AND D.c1 = F.c0 AND A.c3 = D.c0
+AND C.c1 > -1;
+
+SELECT SUM(F.c0), SUM(D.c2), SUM(C.c1), SUM(A.c15)
+FROM A, C, D, F
+WHERE D.c1 = F.c0 AND A.c3 = D.c0 AND A.c2 = C.c0 AND C.c2 = D.c2
+AND A.c42 = 8491 AND D.c2 = 97;
+
+SELECT SUM(A.c21), SUM(F.c2), SUM(C.c1)
+FROM A, C, D, E, F
+WHERE C.c2 = D.c2 AND A.c2 = C.c0 AND C.c1 = E.c0 AND D.c1 = F.c0
+AND C.c0 > 2428967 AND D.c0 < 200;
+
+SELECT SUM(D.c1), SUM(C.c3), SUM(C.c2)
+FROM A, B, C, D
+WHERE C.c2 = D.c2 AND A.c2 = C.c0 AND A.c3 = D.c0 AND A.c1 = B.c0
+AND D.c3 < -6779 AND C.c2 < 2705050;
+
+SELECT SUM(D.c4), SUM(C.c2)
+FROM A, B, C, D
+WHERE A.c1 = B.c0 AND A.c3 = D.c0 AND C.c2 = D.c2 AND A.c2 = C.c0
+AND C.c4 < 242 AND C.c0 = 947;
+
+SELECT SUM(B.c2), SUM(C.c0), SUM(B.c0), SUM(C.c2)
+FROM A, B, C, D
+WHERE A.c1 = B.c0 AND A.c3 = D.c0 AND C.c2 = D.c2 AND A.c2 = C.c0
+AND C.c4 = -9047 AND C.c2 < 2832865;
+
+SELECT SUM(F.c1), SUM(C.c3)
+FROM A, C, D, E, F
+WHERE C.c1 = E.c0 AND A.c2 = C.c0 AND A.c3 = D.c0 AND F.c1 = E.c1
+AND E.c3 < -5375 AND D.c2 > 1133060;
+
+SELECT SUM(D.c4), SUM(F.c2), SUM(A.c37), SUM(C.c2)
+FROM A, C, D, E, F
+WHERE C.c2 = D.c2 AND C.c1 = E.c0 AND A.c3 = D.c0 AND F.c1 = E.c1
+AND D.c0 < 616121 AND A.c33 = -5508;
+
+SELECT SUM(C.c3)
+FROM A, B, C, D, E
+WHERE C.c2 = D.c2 AND A.c2 = C.c0 AND A.c1 = B.c0 AND C.c1 = E.c0
+AND D.c2 = 97 AND C.c4 = -9047;
+
+SELECT SUM(A.c13), SUM(A.c47)
+FROM A, C, D, E, F
+WHERE A.c2 = C.c0 AND C.c1 = E.c0 AND A.c3 = D.c0 AND D.c1 = F.c0
+AND D.c4 < -5019 AND E.c0 = -4 AND A.c32 < -1000;
+
 SELECT SUM(D.c1), SUM(C.c2)
 FROM C, D, E, F
 WHERE C.c1 = E.c0 AND F.c1 = E.c1 AND D.c1 = F.c0 AND C.c2 = D.c2
 AND C.c2 > 3854137 AND C.c4 < -3262;
+
+SELECT SUM(C.c0), SUM(F.c4), SUM(C.c2)
+FROM C, D, E, F
+WHERE C.c2 = D.c2 AND C.c1 = E.c0 AND F.c1 = E.c1 AND D.c1 = F.c0
+AND F.c1 > 810180 AND D.c2 > 1679043;
+
+SELECT SUM(C.c0), SUM(D.c2), SUM(C.c3), SUM(C.c4)
+FROM A, B, C, D
+WHERE C.c2 = D.c2 AND A.c3 = D.c0 AND A.c1 = B.c0 AND A.c2 = C.c0
+AND A.c10 < 1220 AND D.c3 < -4336;
+
+SELECT SUM(B.c4), SUM(F.c0)
+FROM A, B, D, E, F
+WHERE A.c3 = D.c0 AND D.c1 = F.c0 AND A.c1 = B.c0 AND F.c1 = E.c1
+AND D.c0 = 139 AND D.c4 < -4008;
+
+SELECT SUM(D.c2), SUM(B.c3)
+FROM A, B, C, D, E
+WHERE C.c1 = E.c0 AND C.c2 = D.c2 AND A.c3 = D.c0 AND A.c1 = B.c0
+AND C.c2 = 97 AND D.c1 = -1;
+
+SELECT SUM(D.c0), SUM(C.c0), SUM(B.c3), SUM(D.c4)
+FROM A, B, C, D, E
+WHERE A.c2 = C.c0 AND A.c1 = B.c0 AND C.c2 = D.c2 AND C.c1 = E.c0
+AND A.c11 < -919 AND C.c4 = -9047;
+
+SELECT SUM(C.c3), SUM(E.c0)
+FROM A, C, D, E, F
+WHERE C.c1 = E.c0 AND C.c2 = D.c2 AND A.c3 = D.c0 AND D.c1 = F.c0
+AND E.c0 = -4 AND E.c2 > -1090 AND F.c3 < -5000;
+
+SELECT SUM(F.c1), SUM(E.c1), SUM(E.c0)
+FROM A, C, D, E, F
+WHERE D.c1 = F.c0 AND A.c3 = D.c0 AND F.c1 = E.c1 AND C.c1 = E.c0
+AND A.c41 < -7645 AND F.c4 < -7511;
+
+SELECT SUM(D.c4)
+FROM A, C, D, E, F
+WHERE C.c1 = E.c0 AND A.c2 = C.c0 AND A.c3 = D.c0 AND F.c1 = E.c1
+AND A.c25 < -2776 AND A.c8 < 3487;
+
+SELECT SUM(C.c4), SUM(E.c3)
+FROM A, C, D, E
+WHERE C.c2 = D.c2 AND A.c2 = C.c0 AND A.c3 = D.c0 AND C.c1 = E.c0
+AND C.c1 = 1 AND C.c3 = -8712;
+
+SELECT SUM(D.c0), SUM(A.c6), SUM(A.c2)
+FROM A, C, D, E, F
+WHERE C.c2 = D.c2 AND D.c1 = F.c0 AND C.c1 = E.c0 AND A.c2 = C.c0
+AND F.c1 < 120156 AND C.c3 = -8712;
 
