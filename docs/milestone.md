@@ -6,14 +6,7 @@
 > M: 60 seconds setup, 600 seconds timeout  
 > L: 120 seconds setup, 600 seconds timeout
 
-## Todo
-Add timestamp to check what part is using all the time.
-
 ## Data loading
-
-> First, handle data loading. Figure out to read from the CSV files and write out to some other format that will be efficient for reading. A fine place to start would be simply writing out each value as a 32 bit integer.
-
-Done.
 
 Next: while reading file, store them to in memory arrays, as well as outputing to file.
 

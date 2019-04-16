@@ -4,6 +4,8 @@
 
 There are two main parts in this program: Indexing and Querying.
 
+They are handled by `load_csv_file` and `execute` respectively.
+
 ### Indexing
 
 Receive paths to csv files from stdin, each path seperated by `,`.
@@ -37,16 +39,29 @@ For each query string:
 4. optimizer
 5. execution engine
 
-### Data loader
+### Data loader (todo)
 **Input**: 
 
 path to each csv file
 
 **Output**:
 
-Some better format of these data
+Some better format of these data.
 
-For each relation (csv file), we generate one file. The output file should contains two parts: metadata and data.
+For each relation (csv file), we generate two kinds of files:
+1. binary file, one for each column
+2. Metadata file, one for each relation
+
+#### Binary file
+
+Naming: {relation}{column index}.binary  
+For example: A0.binary, B11.binary
+
+We generate one binary file for each column, they are page aligned as long as each int takes 4 bytes to store, we don't care if the last page is in full length (say, 8KB), since reading it shouldn't be a problem.
+
+Possible maximum size: 100MB with 25,000,000 int/row. This means for each relation, we can always fit one of it's entire columns into memory. 
+
+> With up to 26 relations, that would cost 2600MB. But not all relations are that large, so it's resonable.
 
 #### Metadata
 
@@ -60,7 +75,7 @@ size of metadata (multiple of size of block, 1 means sizeof(metadata) == 4096 By
 
 number of column
 
-### Parser
+### Parser (done)
 **Input**: 
 
 SQL query
@@ -68,14 +83,14 @@ SQL query
 **Output**:  
 
 1. Column to select  
-1. Relation to join (and on which column)  
-2. Predicates
+2. Relation to join (and on which column)  
+3. Predicates
 
 ### Catalog
 
 Store metadata about relation and column, like min, max, number of unique value.
 
-### Optimizer
+### Optimizer (todo)
 
 **Input**: SQL
 
@@ -85,6 +100,11 @@ Decide the join order
 
 ### Execution Engine
 
-Actually do the job.
+#### Select
 
-Block nested join, etc.
+#### Join 
+Sorted Block Nested Loop Join
+
+Todo: with B-tree, we could find if a number is in the relation or not much quicker, without going through the whole file like what we did currently.
+
+#### Sum
