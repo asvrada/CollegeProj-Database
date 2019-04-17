@@ -197,7 +197,7 @@ static void *context_push(struct_parse_context *c, size_t size) {
             // expand the size to 1.5 times the original size
             // size += size / 2
             c->size += c->size >> 1;
-#if 0
+#if 1
             printf("stack size: %zu KB\n", c->size / 1024);
 #endif
         }
@@ -1597,26 +1597,6 @@ int cmp_struct_number_row_bsearch(const void *p1, const void *p2) {
     }
 }
 
-typedef struct {
-    // index to rows in dataframe.index
-    int row_df;
-    // index to rows in file
-    int row_file;
-} struct_df_row_file_row;
-
-int cmp_struct_df_file_qsort(const void *p1, const void *p2) {
-    const struct_df_row_file_row *a = (const struct_df_row_file_row *) p1;
-    const struct_df_row_file_row *b = (const struct_df_row_file_row *) p2;
-
-    if (a->row_file < b->row_file) {
-        return -1;
-    } else if (a->row_file > b->row_file) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
 int findIndexOf(const char *const input, int length, char val) {
     for (int i = 0; i < length; i++) {
         if (input[i] == val) {
@@ -1726,6 +1706,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
  * @param relation
  * @param join
  */
+ //todo: buffer outer loop
 void sorted_nested_loop_join(const struct_files *const loaded_files,
                              struct_data_frame *const intermediate,
                              struct_file *const relation,
@@ -1992,11 +1973,6 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
         sorted_nested_loop_join(loaded_file, inter, rhs_file, join);
     }
 }
-
-int cmp_int_qsort(const void *p1, const void *p2) {
-    return (*(int *) p1 - *(int *) p2);
-}
-
 
 /**
  * Execute sums for each column
