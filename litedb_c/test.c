@@ -224,7 +224,6 @@ static void test_parse_relation_column() {
 
     EXPECT_RELATION_COLUMN(&rc, 'D', 0);
 
-    free_struct_relation_column(&rc);
     free_struct_parse_context(&c);
 }
 
@@ -239,7 +238,6 @@ static void test_parse_sum() {
 
     EXPECT_RELATION_COLUMN(&rc, 'D', 0);
 
-    free_struct_relation_column(&rc);
     free_struct_parse_context(&c);
 }
 
@@ -373,7 +371,6 @@ static void test_parse_third_line_join() {
     EXPECT_RELATION_COLUMN(&join.rhs, 'C', 0);
 
     free_struct_parse_context(&c);
-    free_struct_join(&join);
 }
 
 static void test_parse_third_line_joins() {
@@ -432,7 +429,6 @@ static void test_parse_fourth_line_predicate() {
     EXPECT_EQ_INT(-2247, p.rhs);
 
     free_struct_parse_context(&c);
-    free_struct_predicate(&p);
 }
 
 static void test_parse_fourth_line_predicates() {

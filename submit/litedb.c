@@ -232,15 +232,7 @@ static void free_struct_input_files(struct_input_files *files) {
     files->length = 0;
 }
 
-static void free_struct_relation_column(struct_relation_column *rc) {
-    // we do not malloc here, so nothing to free
-}
-
 static void free_struct_first_line(struct_first_line *fl) {
-    for (int i = 0; i < fl->length; i++) {
-        free_struct_relation_column(&fl->sums[i]);
-    }
-
     free(fl->sums);
     fl->sums = NULL;
     fl->length = 0;
@@ -252,33 +244,16 @@ static void free_struct_second_line(struct_second_line *sl) {
     sl->length = 0;
 }
 
-static void free_struct_join(struct_join *join) {
-    free_struct_relation_column(&join->lhs);
-    free_struct_relation_column(&join->rhs);
-}
-
 static void free_struct_third_line(struct_third_line *tl) {
-    for (int i = 0; i < tl->length; i++) {
-        free_struct_join(&tl->joins[i]);
-    }
-
     free(tl->joins);
     tl->joins = NULL;
     tl->length = 0;
-}
-
-static void free_struct_predicate(struct_predicate *p) {
-    // nothing to free
 }
 
 static void free_struct_fourth_line(struct_fourth_line *fl) {
     // this line may be empty
     if (fl->length == 0) {
         return;
-    }
-
-    for (int i = 0; i < fl->length; i++) {
-        free_struct_predicate(&fl->predicates[i]);
     }
 
     free(fl->predicates);
@@ -1042,13 +1017,10 @@ $$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$
 Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20Loader
  */
 
-//const int SIZE_PAGE = 4096;
-//const int SIZE_BUFFER = 2 * SIZE_PAGE;
-//const int NUM_BUFFER_PER_RELATION = 8192;
-
+#define EMPTY -1
+#define LENGTH_FILE_NAME 16
 #define SIZE_PAGE 4096
 #define SIZE_BUFFER (2 * SIZE_PAGE)
-#define NUM_BUFFER_PER_RELATION 8192
 
 /**
  * struct that stores intermediate table (after join, after predicates)
@@ -1090,16 +1062,12 @@ typedef struct {
  * Represents each binary file
  */
 typedef struct {
-    FILE *file_binary;
+    // ID of column buffered
+    int column;
 
-    // size (in bytes): NUM_BUFFER_PER_RELATION * SIZE_BUFFER
-    int *pages;
-
-    // the index of first row the pages stores (inclusive)
-    int row_start;
-    // the index of last row the pages stores (exclusive)
-    int row_end;
-} struct_file_binary;
+    // the entire column
+    int *columns;
+} struct_column;
 
 /**
  * A struct that describe a relation
@@ -1109,9 +1077,9 @@ typedef struct {
     char relation;
 
     /**
-     * The struct to the .binary file
+     * buffer of one column
      */
-    struct_file_binary file_binary;
+    struct_column column;
 
     /**
      * The struct to the .meta file
@@ -1210,26 +1178,17 @@ void free_only_struct_data_frames(struct_files *files) {
     }
 }
 
-void init_struct_file_binary(struct_file_binary *file) {
-    file->file_binary = NULL;
-    file->pages = (int *) malloc(NUM_BUFFER_PER_RELATION * SIZE_BUFFER);
-    memset(file->pages, 0, NUM_BUFFER_PER_RELATION * SIZE_BUFFER);
-    file->row_end = 0;
-    file->row_start = 0;
+void init_struct_column(struct_column *file) {
+    file->column = EMPTY;
+    file->columns = NULL;
 }
 
-void free_struct_file_binary(struct_file_binary *file) {
-    if (file->file_binary != NULL) {
-        fclose(file->file_binary);
-        file->file_binary = NULL;
+void free_struct_column(struct_column *file) {
+    if (file->columns != NULL) {
+        free(file->columns);
+        file->columns = NULL;
     }
-
-    if (file->pages != NULL) {
-        free(file->pages);
-    }
-    file->pages = NULL;
-    file->row_end = 0;
-    file->row_start = 0;
+    file->column = EMPTY;
 }
 
 void init_struct_file(struct_file *file) {
@@ -1238,7 +1197,7 @@ void init_struct_file(struct_file *file) {
     file->num_row = 0;
     file->df = NULL;
 
-    init_struct_file_binary(&file->file_binary);
+    init_struct_column(&file->column);
 }
 
 void free_struct_file(struct_file *file) {
@@ -1253,7 +1212,7 @@ void free_struct_file(struct_file *file) {
         file->df = NULL;
     }
 
-    free_struct_file_binary(&file->file_binary);
+    free_struct_column(&file->column);
 }
 
 void init_struct_files(struct_files *files, int length) {
@@ -1297,6 +1256,13 @@ void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
     buffer->cur_size = 0;
 }
 
+/////////////////////
+// Dataloader Core //
+/////////////////////
+void get_name_file_column(char relation, int column, char *file_name) {
+    sprintf(file_name, "%c%d.binary", relation, column);
+}
+
 /**
  * write content to output buffer
  * The actual file will be write if buffer is almost full
@@ -1305,7 +1271,7 @@ void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, stru
     size_t size_buffer = size * count;
 
     // manual buffer is full
-    if (manual_buffer->cur_size + size_buffer > manual_buffer->max_size) {
+    if (manual_buffer->cur_size == manual_buffer->max_size) {
         // we write the entire block into disk, so it's page aligned
         fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->max_size, stream);
 
@@ -1327,80 +1293,56 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
     }
 
     // write entire buffer into disk, so it's page aligned
-    fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->max_size, stream);
+    fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->cur_size, stream);
 
     // buffer is now empty
     manual_buffer->cur_size = 0;
 }
 
+const int *const select_column_from_file(struct_file *const file, const int column) {
+    // buffer hit
+    if (file->column.column == column) {
+        return file->column.columns;
+    }
+
+    assert(file->column.columns != NULL);
+
+    file->column.column = column;
+
+    char path_file[LENGTH_FILE_NAME] = {'\0'};
+    get_name_file_column(file->relation, column, path_file);
+
+    FILE *file_column = fopen(path_file, "rb");
+    fseek(file_column, 0, SEEK_END);
+    size_t file_size = ftell(file_column);
+    fseek(file_column, 0, SEEK_SET);
+
+    size_t size_read = fread(file->column.columns, 1, file_size, file_column);
+    assert(size_read == file_size);
+
+    fclose(file_column);
+    return file->column.columns;
+}
+
 /**
- * Select the index of row from file
- * @param file
- * @param row: 0 indexed
+ * Find out how many columns are there by counting number of , in the first line
+ * @param buffer: buffer of the file from disk
+ * @param size: size of this buffer (in bytes)
+ * @return number of column
  */
-const int *const select_row_from_file(struct_file *const file, const int row) {
-    ASSERT(file->num_row > row);
+int get_num_col(const char *const buffer, size_t size) {
+    int count = 0;
+    int cursor = 0;
 
-#ifdef DEBUG_PROFILING
-    count_buffer_total++;
-    count_buffer_total_query++;
-#endif
+    while (cursor < size && buffer[cursor] != '\n') {
+        if (buffer[cursor] == ',') {
+            count++;
+        }
 
-    // 1. calculate offset in bytes to read from disk
-    const int byte_per_row = file->num_col * sizeof(int);
-    const int row_per_buffer = SIZE_BUFFER / byte_per_row;
-
-    // if buffered
-    if (file->file_binary.row_start <= row && row < file->file_binary.row_end) {
-#ifdef DEBUG_PROFILING
-        count_buffer_hit_query++;
-        count_buffer_hit_total++;
-#endif
-        // offset (in number of buffers) from the beginning of pages
-        int offset_num_buffer = (row - file->file_binary.row_start) / row_per_buffer;
-
-        return (int *) ((char *) file->file_binary.pages + (offset_num_buffer * SIZE_BUFFER)) +
-               (row - file->file_binary.row_start - offset_num_buffer * row_per_buffer) * file->num_col;
+        cursor++;
     }
 
-#ifdef DEBUG_PROFILING
-    time_t start = time(NULL);
-#endif
-
-    // offset (in number of buffers) from the beginning of file
-    int offset_num_buffer = row / row_per_buffer;
-
-    // not buffered, read pages into buffer
-    // offset in bytes
-    size_t offset = offset_num_buffer * SIZE_BUFFER;
-    // move pointer to that bytes
-    fseek(file->file_binary.file_binary, offset, SEEK_SET);
-
-    // read in pages
-    size_t size_read = fread(file->file_binary.pages, 1, NUM_BUFFER_PER_RELATION * SIZE_BUFFER,
-                             file->file_binary.file_binary);
-
-    if (size_read == 0) {
-        // this should never happen
-        ASSERT(0);
-    }
-
-    file->file_binary.row_start = offset_num_buffer * row_per_buffer;
-    file->file_binary.row_end = file->file_binary.row_start + row_per_buffer * NUM_BUFFER_PER_RELATION;
-
-    // if size_read is smaller than expected, update row end
-    if (size_read < NUM_BUFFER_PER_RELATION * SIZE_BUFFER) {
-        file->file_binary.row_end = file->file_binary.row_start + size_read / SIZE_BUFFER * row_per_buffer;
-    }
-
-#ifdef DEBUG_PROFILING
-    long time_spend = time(NULL) - start;
-    time_query += time_spend;
-    time_total += time_spend;
-#endif
-
-    return file->file_binary.pages +
-           (row - file->file_binary.row_start) * file->num_col;
+    return count + 1;
 }
 
 /**
@@ -1416,48 +1358,57 @@ const int *const select_row_from_file(struct_file *const file, const int row) {
  * @param file: path to the file on the disk
  * @param loaded_file: struct describing the loaded file
  */
-void load_csv_file(char relation, char *file, struct_file *loaded_file) {
-    // set name for files to write to disk
-    char path_file_binary[] = "?.binary";
-    char path_file_meta[] = "?.meta";
-    path_file_binary[0] = relation;
-    path_file_meta[0] = relation;
+void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file) {
+    // todo meta file
+    FILE *file_csv = fopen(path_file_csv, "r");
+    // array of file*
+    FILE **files_column = NULL;
 
-    // freed at the end of this function
-    FILE *file_input = fopen(file, "r");
-    FILE *file_binary = fopen(path_file_binary, "wb");
-    // todo: file_meta
-    // FILE *file_meta
+    /////////////
+    // Buffers //
+    /////////////
+    char file_name[LENGTH_FILE_NAME] = {'\0'};
 
     // main buffer to read char from file
     char *buffer = (char *) malloc(SIZE_BUFFER);
-    char *secondary_buffer = (char *) malloc(64);
+    memset(buffer, 0, SIZE_BUFFER);
+
+    char secondary_buffer[64] = {'\0'};
     // length of content stored in the buffer
     int size_secondary_buffer = 0;
 
-    struct_fwrite_buffer fwrite_buffer;
-    // init buffer
-    init_struct_fwrite_buffer(&fwrite_buffer, SIZE_BUFFER);
+    // one fwrite_buffer for each column
+    struct_fwrite_buffer *fwrite_buffers = NULL;
 
-    int num_row = 0;
-    int num_col = -1;
-    int tmp_num_col = 0;
-
-    // we use the stack to store the first line of csv file, because we don't know the number of column
-    // freed after processing the first line of csv file
-    struct_parse_context c;
-    init_struct_parse_context(&c, NULL);
-
-    // buffer for storing numbers in the same row
-    int *buffer_row = NULL;
-    // number of int currently stored, if == num_col, write the buffer_row to output buffer and empty buffer
-    int size_buffer_row = 0;
+    int num_col = EMPTY;
+    int num_count = 0;
 
     while (1) {
-        int size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
+        int size_buffer = fread(buffer, sizeof(buffer[0]), SIZE_BUFFER, file_csv);
 
         if (size_buffer == 0) {
             break;
+        }
+
+        // only execute once at the beginning
+        if (num_col == EMPTY) {
+            num_col = get_num_col(buffer, size_buffer);
+
+            // then init output files
+            files_column = (FILE **) malloc(num_col * sizeof(FILE *));
+            fwrite_buffers = (struct_fwrite_buffer *) malloc(num_col * sizeof(struct_fwrite_buffer));
+
+            for (int i = 0; i < num_col; i++) {
+                files_column[i] = NULL;
+                // open file
+                get_name_file_column(relation, i, file_name);
+
+                files_column[i] = fopen(file_name, "wb");
+                assert(files_column[i] != NULL);
+
+                // init buffer for each column
+                init_struct_fwrite_buffer(&fwrite_buffers[i], SIZE_BUFFER);
+            }
         }
 
         int cursor = 0;
@@ -1466,36 +1417,9 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
         while (cursor < size_buffer) {
             char current = buffer[cursor];
 
-            // if its end of number
+            // we find a new number
             if (current == ',' || current == '\n') {
-                if (num_col == -1) {
-                    tmp_num_col++;
-
-                    // This is the end of first line
-                    // We do:
-                    // 1. assign num_col
-                    // 2. create row buffer
-                    // 3. move content inside stack into row buffer
-                    if (current == '\n') {
-                        // 1. assign num_col
-                        num_col = tmp_num_col;
-
-                        // 2. create row buffer
-                        // find out size of stack, plus one because the last number is not pushed into the stack
-                        size_t top = c.top;
-                        size_t num_bytes_buffer_row = num_col * sizeof(int);
-                        // freed at the end of this function
-                        buffer_row = (int *) malloc(num_bytes_buffer_row);
-
-                        // 3. move content inside stack into row buffer
-                        // copy content from stack into buffer row
-                        memcpy(buffer_row, context_pop(&c, top), top);
-                        size_buffer_row = top / sizeof(int);
-                        // free stack
-                        free_struct_parse_context(&c);
-                    }
-                }
-
+                num_count++;
                 int number = 0;
 
                 if (size_secondary_buffer == 0) {
@@ -1520,27 +1444,16 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
                 cursor += 1;
                 cursor_prev = cursor;
 
-                // if still processing first line, output number to stack
-                if (num_col == -1) {
-                    *(int *) context_push(&c, sizeof(number)) = number;
-                } else {
-                    // write number to buffer row
-                    buffer_row[size_buffer_row] = number;
-                    size_buffer_row++;
-                }
+                // store this number to column buffer
+                // which column is this number in?
+                int col = (num_count - 1) % num_col;
 
-                // if buffer row is full, write to output buffer, and empty it
-                // this also means row++
-                if (size_buffer_row == num_col) {
-                    fwrite_buffered(buffer_row, sizeof(buffer_row[0]), size_buffer_row, file_binary, &fwrite_buffer);
-                    size_buffer_row = 0;
-                    num_row++;
-                }
-                continue;
+                // write number to buffer column
+                fwrite_buffered(&number, sizeof(number), 1, files_column[col], &fwrite_buffers[col]);
+            } else {
+                // this current char is part of the number, skip it
+                cursor++;
             }
-
-            // this current char is part of the number, skip it
-            cursor++;
         }
 
         // we have read the entire buffer, now copy whats left into secondary buffer
@@ -1555,30 +1468,31 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
         }
     }
 
-    // todo: handle when csv has no newline at the end
+    assert(size_secondary_buffer == 0);
 
-    assert(size_buffer_row == 0);
-
-    // write whats left inside output buffer to file
-    if (fwrite_buffer.cur_size != 0) {
-        fwrite_buffered_flush(&fwrite_buffer, file_binary);
+    for (int i = 0; i < num_col; i++) {
+        // write whats left inside output buffer to file
+        fwrite_buffered_flush(&fwrite_buffers[i], files_column[i]);
     }
 
-    fclose(file_binary);
-
-    // assign value to loaded_file
     loaded_file->relation = relation;
-    loaded_file->file_binary.file_binary = fopen(path_file_binary, "r");
     loaded_file->num_col = num_col;
-    loaded_file->num_row = num_row;
+    loaded_file->num_row = num_count / num_col;
+    loaded_file->column.columns = (int *) malloc(loaded_file->num_row * sizeof(int));
 
+    /////////////
+    // cleanup //
+    /////////////
+    fclose(file_csv);
+
+    for (int i = 0; i < num_col; i++) {
+        fclose(files_column[i]);
+        free_struct_fwrite_buffer(&fwrite_buffers[i]);
+    }
+    free(files_column);
+    free(fwrite_buffers);
 
     free(buffer);
-    free(secondary_buffer);
-    free(buffer_row);
-    free_struct_fwrite_buffer(&fwrite_buffer);
-
-    fclose(file_input);
 }
 
 /**
@@ -1591,6 +1505,7 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
 
     // read each file
     for (int i = 0; i < path_files->length; i++) {
+//        load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
         load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
     }
 
@@ -1656,26 +1571,6 @@ int cmp_struct_number_row_bsearch(const void *p1, const void *p2) {
     }
 }
 
-typedef struct {
-    // index to rows in dataframe.index
-    int row_df;
-    // index to rows in file
-    int row_file;
-} struct_df_row_file_row;
-
-int cmp_struct_df_file_qsort(const void *p1, const void *p2) {
-    const struct_df_row_file_row *a = (const struct_df_row_file_row *) p1;
-    const struct_df_row_file_row *b = (const struct_df_row_file_row *) p2;
-
-    if (a->row_file < b->row_file) {
-        return -1;
-    } else if (a->row_file > b->row_file) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
 int findIndexOf(const char *const input, int length, char val) {
     for (int i = 0; i < length; i++) {
         if (input[i] == val) {
@@ -1706,6 +1601,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
         init_struct_data_frame_for_file(file);
     }
 
+    // empty data frame, do nothing
     if (file->df->num_row == 0) {
         return;
     }
@@ -1724,12 +1620,13 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
     int number = 0;
     int shouldKeep = 0;
 
+    const int *const columns = select_column_from_file(file, column);
+
     // for each row
     for (; fast < row; fast++) {
         shouldKeep = 0;
         // check predicate
-        const int *const tmp_row = select_row_from_file(file, df->index[fast]);
-        number = tmp_row[column];
+        number = columns[df->index[fast]];
 
         switch (predicate->operator) {
             case EQUAL:
@@ -1776,19 +1673,18 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
 }
 
 /**
- * (Left Deep) Join two data frame that representing some relations
- * We assume the input is always valid
+ * (Left deep) join two columns(represented by data frame) from two relation
  *
- * The result of join will be stored back into intermediate
- *
- * @param loaded_files: info about relations
- * @param intermediate: the intermediate result of joining two relation
- * @param relation: some of the original relation
+ * @param loaded_files
+ * @param intermediate
+ * @param relation
+ * @param join
  */
-void nested_loop_join(const struct_files *const loaded_files,
-                      struct_data_frame *const intermediate,
-                      struct_file *const relation,
-                      const struct_join *join) {
+ //todo: buffer outer loop
+void sorted_nested_loop_join(const struct_files *const loaded_files,
+                             struct_data_frame *const intermediate,
+                             struct_file *const relation,
+                             const struct_join *join) {
     ASSERT(loaded_files != NULL && intermediate != NULL && relation != NULL && join != NULL);
 
     ///////////////////////////////////
@@ -1796,19 +1692,19 @@ void nested_loop_join(const struct_files *const loaded_files,
     //////////////////////////////////
     // first 1: size of relation
     // number of relations, or number of index per row, of intermediate dataframe
-    int inter_num_relations = strlen(intermediate->relations);
+    int num_relations_before = strlen(intermediate->relations);
 
     // second 1: make room for ending \0
-    size_t length_joined_relations = inter_num_relations + 1 + 1;
+    size_t length_joined_relations = num_relations_before + 1 + 1;
     // the name of the new relations, remeber to free the one from inter and assign this to it
-    char *joined_relations = (char *) malloc(length_joined_relations * sizeof(char));
+    char *relations_joined = (char *) malloc(length_joined_relations * sizeof(char));
     // assign value
-    memcpy(joined_relations, intermediate->relations, inter_num_relations);
-    joined_relations[length_joined_relations - 2] = relation->relation;
-    joined_relations[length_joined_relations - 1] = '\0';
+    memcpy(relations_joined, intermediate->relations, num_relations_before);
+    relations_joined[length_joined_relations - 2] = relation->relation;
+    relations_joined[length_joined_relations - 1] = '\0';
 
     // todo: check if one of the df is empty, and don't init if isn't empty
-    // Init df for files without one
+    // Init df for right hand side file
     if (relation->df == NULL) {
         init_struct_data_frame_for_file(relation);
     }
@@ -1820,126 +1716,87 @@ void nested_loop_join(const struct_files *const loaded_files,
     struct_parse_context c;
     init_struct_parse_context(&c, NULL);
 
-    int inter_offset_relation = findIndexOf(intermediate->relations,
-                                            inter_num_relations,
-                                            join->lhs.relation);
+    int offset_column_left = findIndexOf(intermediate->relations,
+                                         num_relations_before,
+                                         join->lhs.relation);
 
-    // pointer to loaded file on the left side of join
-    // join->lhs.relation - 'A' = index of the file
+    //////////////////
+    // read columns //
+    //////////////////
     struct_file *const file_left = loaded_files->files + (join->lhs.relation - 'A');
+    struct_file *const file_right = loaded_files->files + (join->rhs.relation - 'A');
+    const int *const column_left = select_column_from_file(file_left, join->lhs.column);
+    const int *const column_right = select_column_from_file(file_right, join->rhs.column);
 
-    /////////////////////////////////////
-    // buffer for rows from outer loop //
-    /////////////////////////////////////
-    struct_number_row *buffer_outer_loop = NULL;
-    // we limit the memory useage of this buffer to the follow size
-    // 2^24 (16777216) * 8 bytes = 134 MB
-    int max_length_buffer_outer_loop = 16777216;
+    ///////////////////////////
+    // Buffer for outer loop //
+    ///////////////////////////
+    // todo: since a entire column can always fit in memeory, we read them in and sort
+    // buffer numbers in a column as a pair (number, row), sort buffer by number
+    int length_buffer_outer_loop = intermediate->num_row;
+    struct_number_row *buffer_outer_loop = (struct_number_row *) malloc(
+            length_buffer_outer_loop * sizeof(struct_number_row));
 
-    // check if the rows from outer loop can entirely fit in the buffer
-    if (intermediate->num_row < max_length_buffer_outer_loop) {
-        // it can entirely fit in the buffer, reduce the max size
-        max_length_buffer_outer_loop = intermediate->num_row;
+    // fill buffer with (number, index in df.index)
+    for (int i = 0; i < length_buffer_outer_loop; i++) {
+        buffer_outer_loop[i].row = i;
+        buffer_outer_loop[i].number = column_left[
+                intermediate->index[i * num_relations_before + offset_column_left]
+        ];
     }
 
-    buffer_outer_loop = (struct_number_row *) malloc(max_length_buffer_outer_loop * sizeof(struct_number_row));
-    // current number of elements in this buffer
-    int length_buffer_outer_loop = 0;
+    // qsort
+    qsort(buffer_outer_loop, length_buffer_outer_loop, sizeof(struct_number_row), cmp_struct_number_row_qsort);
 
-    // outer loop
-    // sort the row_file
-    // a struct that represents pair of (row_df, row_file)
-    struct_df_row_file_row *intermediate_index_row =
-            (struct_df_row_file_row *) malloc(intermediate->num_row * sizeof(struct_df_row_file_row));
+    // inner loop
+    // binary search the each number from the right relation in the left relation
+    for (int row_relation = 0; row_relation < relation->df->num_row; row_relation++) {
+        const int number_right = column_right[relation->df->index[row_relation]];
 
-    // push all rows into it
-    for (int row_inter = 0; row_inter < intermediate->num_row; row_inter++) {
-        intermediate_index_row[row_inter].row_df = row_inter;
-        intermediate_index_row[row_inter].row_file = intermediate->index[row_inter * inter_num_relations +
-                                                                         inter_offset_relation];
-    }
+        struct_number_row key;
+        key.number = number_right;
 
-    // sort row_file so the file is accessed in a sequential order
-    qsort(intermediate_index_row, intermediate->num_row, sizeof(struct_df_row_file_row), cmp_struct_df_file_qsort);
+        struct_number_row *res = bsearch(
+                &key, buffer_outer_loop,
+                length_buffer_outer_loop,
+                sizeof(struct_number_row),
+                cmp_struct_number_row_bsearch);
 
-    for (int row_inter = 0; row_inter < intermediate->num_row; row_inter++) {
-        const int idx_row_left = intermediate_index_row[row_inter].row_file;
-
-        const int *const row_left = select_row_from_file(file_left, idx_row_left);
-        int number_left = row_left[join->lhs.column];
-
-        // new pair into outer buffer
-        buffer_outer_loop[length_buffer_outer_loop].number = number_left;
-        buffer_outer_loop[length_buffer_outer_loop].row = intermediate_index_row[row_inter].row_df;
-        length_buffer_outer_loop++;
-
-        if (length_buffer_outer_loop < max_length_buffer_outer_loop) {
-            // buffer not full, continue to add new element
+        if (res == NULL) {
             continue;
         }
 
-        // when buffer is full, sort it by number
-        qsort(buffer_outer_loop, length_buffer_outer_loop, sizeof(struct_number_row), cmp_struct_number_row_qsort);
+        int i = res - buffer_outer_loop;
 
-        // inner loop
-        for (int row_relation = 0; row_relation < relation->df->num_row; row_relation++) {
-            const int *const row_right = select_row_from_file(relation,
-                                                              relation->df->index[row_relation]);
-
-            // select number from given columns
-            int number_right = row_right[join->rhs.column];
-
-            struct_number_row key;
-            key.number = number_right;
-            // doesn't matter
-            key.row = -1;
-
-            // use binary search to find number right
-            struct_number_row const *res = bsearch(&key,
-                                                   buffer_outer_loop,
-                                                   length_buffer_outer_loop,
-                                                   sizeof(struct_number_row),
-                                                   cmp_struct_number_row_bsearch);
-
-            if (res == NULL) {
-                continue;
-            }
-
-            int i = res - buffer_outer_loop;
-
-            // todo: make this efficient
-            // move i to the first duplicate element
-            while (i > 0 && buffer_outer_loop[i].number == buffer_outer_loop[i - 1].number) {
-                i--;
-            }
-
-            // loop through buffer
-            // i = index of elements that number == number_right
-            for (; (i < length_buffer_outer_loop && buffer_outer_loop[i].number == number_right);
-                   i++) {
-                // push this row (based on original file) into stack
-                // copy index[row_inter] from inter, and concat it with index[row_relation]
-                size_t size_to_copy = inter_num_relations * sizeof(int);
-
-                memcpy(context_push(&c, size_to_copy),
-                       &(intermediate->index[buffer_outer_loop[i].row * inter_num_relations]),
-                       size_to_copy);
-
-                *(int *) context_push(&c, sizeof(int)) = relation->df->index[row_relation];
-            }
+        // todo: make this efficient
+        // move i to the first duplicate element
+        while (i > 0 && buffer_outer_loop[i].number == buffer_outer_loop[i - 1].number) {
+            i--;
         }
 
-        // empty buffer
-        length_buffer_outer_loop = 0;
+        // loop through buffer
+        // i = index of elements that number == number_right
+        for (; (i < length_buffer_outer_loop && buffer_outer_loop[i].number == number_right);
+               i++) {
+            // push this row (based on original file) into stack
+            // copy index[row_inter] from inter, and concat it with index[row_relation]
+            size_t size_to_copy = num_relations_before * sizeof(int);
+
+            memcpy(context_push(&c, size_to_copy),
+                   &(intermediate->index[buffer_outer_loop[i].row * num_relations_before]),
+                   size_to_copy);
+
+            *(int *) context_push(&c, sizeof(int)) = relation->df->index[row_relation];
+        }
     }
 
-    // clean up, swap index and relations
-    // free original index and relation
+    /////////////
+    // cleanup //
+    ////////////
     free(intermediate->relations);
     free(intermediate->index);
 
-    // assign new value
-    intermediate->relations = joined_relations;
+    intermediate->relations = relations_joined;
 
     // copy index
     // size of index, in bytes
@@ -1960,11 +1817,9 @@ void nested_loop_join(const struct_files *const loaded_files,
 
     free_struct_parse_context(&c);
     free(buffer_outer_loop);
-    free(intermediate_index_row);
 }
 
-
-void nested_loop_join_both_joined_before(const struct_files *const loaded_files,
+void sorted_nested_loop_join_both_joined_before(const struct_files *const loaded_files,
                                          struct_data_frame *const intermediate,
                                          const struct_join *join) {
     ASSERT(loaded_files != NULL && intermediate != NULL && join != NULL);
@@ -1984,18 +1839,16 @@ void nested_loop_join_both_joined_before(const struct_files *const loaded_files,
 
     struct_file *const file_left = loaded_files->files + (join->lhs.relation - 'A');
     struct_file *const file_right = loaded_files->files + (join->rhs.relation - 'A');
+    const int *const column_left = select_column_from_file(file_left, join->lhs.column);
+    const int *const column_right = select_column_from_file(file_right, join->rhs.column);
+
 
     // for each row in inter
-    // todo: buffer before access
-    // todo: sort
     for (int i = 0; i < intermediate->num_row; i++) {
         const int *const row_index = &intermediate->index[i * num_relations];
 
-        const int *const row_left = select_row_from_file(file_left, row_index[offset_lhs]);
-        const int *const row_right = select_row_from_file(file_right, row_index[offset_rhs]);
-
-        int number_left = row_left[join->lhs.column];
-        int number_right = row_right[join->rhs.column];
+        int number_left = column_left[row_index[offset_lhs]];
+        int number_right = column_right[row_index[offset_rhs]];
 
         if (number_left == number_right) {
             size_t size_row = num_relations * sizeof(int);
@@ -2076,7 +1929,7 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
         // if both joined before
         if (-1 != index_left && -1 != index_right) {
 
-            nested_loop_join_both_joined_before(loaded_file, inter, join);
+            sorted_nested_loop_join_both_joined_before(loaded_file, inter, join);
             continue;
         }
 
@@ -2091,20 +1944,17 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
 
         struct_file *rhs_file = &loaded_file->files[join->rhs.relation - 'A'];
 
-        nested_loop_join(loaded_file, inter, rhs_file, join);
+        sorted_nested_loop_join(loaded_file, inter, rhs_file, join);
     }
 }
 
-int cmp_int_qsort(const void *p1, const void *p2) {
-    return (*(int *) p1 - *(int *) p2);
-}
-
 /**
- * This will output the final result
+ * Execute sums for each column
  *
  * @param loaded_file
  * @param fl
  * @param result
+ * @param ans
  */
 void execute_sums(struct_files *const loaded_file,
                   const struct_first_line *const fl,
@@ -2112,37 +1962,23 @@ void execute_sums(struct_files *const loaded_file,
                   int64_t *ans) {
     int num_relations = strlen(result->relations);
 
-    int *sorted_rows = (int *) malloc(result->num_row * sizeof(int));
-    memset(sorted_rows, 0, result->num_row * sizeof(int));
-
-    // query for each sum, and sort file rows
     for (int col = 0; col < fl->length; col++) {
+        // the sum query
         struct_relation_column *rc = &fl->sums[col];
         char relation = rc->relation;
-        // find the index of this relation in the result
-        int index = findIndexOf(result->relations, strlen(result->relations), relation);
 
-        // create an array to store file rows
-        for (int i = 0; i < result->num_row; i++) {
-            int *rows = &result->index[num_relations * i];
-            sorted_rows[i] = rows[index];
-        }
+        // find the index of this relation in the df
+        int offset = findIndexOf(result->relations, num_relations, relation);
 
-        qsort(sorted_rows, result->num_row, sizeof(int), cmp_int_qsort);
-
-        // and select row from file
+        // get the relation where this column in
         struct_file *file = &loaded_file->files[relation - 'A'];
 
-        for (int i = 0; i < result->num_row; i++) {
-            // find value
-            const int *tmp_row = select_row_from_file(file, sorted_rows[i]);
+        const int *const columns = select_column_from_file(file, rc->column);
 
-            // accumulate result
-            ans[col] += tmp_row[rc->column];
+        for (int i = 0; i < result->num_row;i++) {
+            ans[col] += columns[result->index[i * num_relations + offset]];
         }
     }
-
-    free(sorted_rows);
 }
 
 /**
@@ -2192,7 +2028,8 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
     free(ans);
 
 #ifdef DEBUG_PROFILING
-    fprintf(stderr, "                 Query     Total\nTime        %10ld%10ld\nBuffer miss %10ld%10ld\nBuffer      %10ld%10ld\n\n",
+    fprintf(stderr,
+            "                 Query     Total\nTime        %10ld%10ld\nBuffer miss %10ld%10ld\nBuffer      %10ld%10ld\n\n",
             time_query,
             time_total,
             count_buffer_total_query - count_buffer_hit_query,
@@ -2200,7 +2037,6 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
             count_buffer_total_query,
             count_buffer_total);
 #endif
-
 }
 
 #endif //LITE_DB_LITEDB_C

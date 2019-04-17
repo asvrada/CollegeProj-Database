@@ -197,7 +197,7 @@ static void *context_push(struct_parse_context *c, size_t size) {
             // expand the size to 1.5 times the original size
             // size += size / 2
             c->size += c->size >> 1;
-#if 1
+#if 0
             printf("stack size: %zu KB\n", c->size / 1024);
 #endif
         }
@@ -232,15 +232,7 @@ static void free_struct_input_files(struct_input_files *files) {
     files->length = 0;
 }
 
-static void free_struct_relation_column(struct_relation_column *rc) {
-    // we do not malloc here, so nothing to free
-}
-
 static void free_struct_first_line(struct_first_line *fl) {
-    for (int i = 0; i < fl->length; i++) {
-        free_struct_relation_column(&fl->sums[i]);
-    }
-
     free(fl->sums);
     fl->sums = NULL;
     fl->length = 0;
@@ -252,33 +244,16 @@ static void free_struct_second_line(struct_second_line *sl) {
     sl->length = 0;
 }
 
-static void free_struct_join(struct_join *join) {
-    free_struct_relation_column(&join->lhs);
-    free_struct_relation_column(&join->rhs);
-}
-
 static void free_struct_third_line(struct_third_line *tl) {
-    for (int i = 0; i < tl->length; i++) {
-        free_struct_join(&tl->joins[i]);
-    }
-
     free(tl->joins);
     tl->joins = NULL;
     tl->length = 0;
-}
-
-static void free_struct_predicate(struct_predicate *p) {
-    // nothing to free
 }
 
 static void free_struct_fourth_line(struct_fourth_line *fl) {
     // this line may be empty
     if (fl->length == 0) {
         return;
-    }
-
-    for (int i = 0; i < fl->length; i++) {
-        free_struct_predicate(&fl->predicates[i]);
     }
 
     free(fl->predicates);
@@ -1046,7 +1021,6 @@ Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20
 #define LENGTH_FILE_NAME 16
 #define SIZE_PAGE 4096
 #define SIZE_BUFFER (2 * SIZE_PAGE)
-#define NUM_BUFFER_PER_RELATION 8192
 
 /**
  * struct that stores intermediate table (after join, after predicates)
