@@ -1331,7 +1331,9 @@ int * select_column_from_file(struct_file *const file, const int column) {
     if (file->column.column == column) {
         return file->column.columns;
     }
-    
+
+    assert(file->column.columns != NULL);
+
     file->column.column = column;
 
     char path_file[LENGTH_FILE_NAME] = {'\0'};
@@ -1346,7 +1348,6 @@ int * select_column_from_file(struct_file *const file, const int column) {
     assert(size_read == file_size);
 
     fclose(file_column);
-//    free(path_file);
     return file->column.columns;
 }
 
@@ -1492,8 +1493,6 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
         if (num_col == EMPTY) {
             num_col = get_num_col(buffer, size_buffer);
 
-            loaded_file->column.columns = (int *) malloc(num_col * sizeof(int));
-
             // then init output files
             files_column = (FILE **) malloc(num_col * sizeof(FILE *));
             fwrite_buffers = (struct_fwrite_buffer *) malloc(num_col * sizeof(struct_fwrite_buffer));
@@ -1579,6 +1578,7 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     loaded_file->relation = relation;
     loaded_file->num_col = num_col;
     loaded_file->num_row = num_count / num_col;
+    loaded_file->column.columns = (int *) malloc(loaded_file->num_row * sizeof(int));
 
     /////////////
     // cleanup //
@@ -1592,7 +1592,6 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     free(files_column);
     free(fwrite_buffers);
 
-//    free(file_name);
     free(buffer);
     free(secondary_buffer);
 }

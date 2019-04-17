@@ -144,12 +144,12 @@ static void test_load_csv_files(const char *path) {
 
 
 static void test_dataloader() {
-//    test_load_csv_file_xxxs_E();
-//    test_load_csv_file_xs();
+    test_load_csv_file_xxxs_E();
+    test_load_csv_file_xs();
     test_load_csv_file_l_D();
-//    test_load_csv_file_l_F();
-//    test_load_csv_files("./test_input/first_part_xxxs.txt");
-//    test_load_csv_files("./test_input/first_part_m.txt");
+    test_load_csv_file_l_F();
+    test_load_csv_files("./test_input/first_part_xxxs.txt");
+    test_load_csv_files("./test_input/first_part_m.txt");
 }
 
 #if  0
