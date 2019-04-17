@@ -33,7 +33,7 @@ do {\
 // Data loader //
 /////////////////
 
-static void test_load_csv_file() {
+static void test_load_csv_file_xxxs_E() {
     struct_file file;
     init_struct_file(&file);
 
@@ -42,10 +42,15 @@ static void test_load_csv_file() {
     EXPECT_EQ_INT(2, file.num_row);
     EXPECT_EQ_INT(5, file.num_col);
 
-    const int *row = select_row_from_file(&file, 0);
+    const int *column = select_column_from_file(&file, 0);
 
-    EXPECT_EQ_INT(-1, row[0]);
-    EXPECT_EQ_INT(-2308, row[1]);
+    EXPECT_EQ_INT(-1, column[0]);
+    EXPECT_EQ_INT(-0, column[1]);
+
+    column = select_column_from_file(&file, 3);
+
+    EXPECT_EQ_INT(2530, column[0]);
+    EXPECT_EQ_INT(3279, column[1]);
 
     free_struct_file(&file);
 }
@@ -56,20 +61,20 @@ static void test_load_csv_file_xs() {
 
     load_csv_file('A', "../data/xs/A.csv", &file);
 
-    const int *row = select_row_from_file(&file, 49999);
+    EXPECT_EQ_INT(50000, file.num_row);
+    EXPECT_EQ_INT(50, file.num_col);
 
-    EXPECT_EQ_INT(6357, row[0]);
-    EXPECT_EQ_INT(1393518, row[1]);
+    const int *column = select_column_from_file(&file, 0);
 
-    row = select_row_from_file(&file, 0);
+    EXPECT_EQ_INT(-5359, column[0]);
+    EXPECT_EQ_INT(6134, column[1]);
+    EXPECT_EQ_INT(6357, column[49999]);
 
-    EXPECT_EQ_INT(-5359, row[0]);
-    EXPECT_EQ_INT(3391410, row[1]);
+    column = select_column_from_file(&file, 1);
 
-    row = select_row_from_file(&file, 26401);
-
-    EXPECT_EQ_INT(-4777, row[0]);
-    EXPECT_EQ_INT(1440647, row[1]);
+    EXPECT_EQ_INT(3391410, column[0]);
+    EXPECT_EQ_INT(1926998, column[1]);
+    EXPECT_EQ_INT(1393518, column[49999]);
 
     free_struct_file(&file);
 }
@@ -81,11 +86,29 @@ static void test_load_csv_file_l_D() {
     load_csv_file('D', "../data/l/D.csv", &file);
 
     EXPECT_EQ_INT(3495, file.num_row);
+    EXPECT_EQ_INT(8, file.num_col);
 
-    const int *row = select_row_from_file(&file, 3494);
+    const int *column = select_column_from_file(&file, 7);
 
-    EXPECT_EQ_INT(3494, row[0]);
-    EXPECT_EQ_INT(-10, row[1]);
+    EXPECT_EQ_INT(-16, column[0]);
+    EXPECT_EQ_INT(-39, column[1]);
+
+    column = select_column_from_file(&file, 0);
+
+    EXPECT_EQ_INT(0, column[0]);
+    EXPECT_EQ_INT(100, column[100]);
+
+    free_struct_file(&file);
+}
+
+static void test_load_csv_file_l_A() {
+    struct_file file;
+    init_struct_file(&file);
+
+    load_csv_file('A', "../data/l/A.csv", &file);
+
+    EXPECT_EQ_INT(10000000, file.num_row);
+    EXPECT_EQ_INT(50, file.num_col);
 
     free_struct_file(&file);
 }
@@ -97,11 +120,12 @@ static void test_load_csv_file_l_F() {
     load_csv_file('F', "../data/l/F.csv", &file);
 
     EXPECT_EQ_INT(2041, file.num_row);
+    EXPECT_EQ_INT(14, file.num_col);
 
-    const int *row = select_row_from_file(&file, 2040);
+    const int *column = select_column_from_file(&file, 0);
 
-    EXPECT_EQ_INT(2040, row[0]);
-    EXPECT_EQ_INT(25, row[1]);
+    EXPECT_EQ_INT(0, column[0]);
+    EXPECT_EQ_INT(25, column[25]);
 
     free_struct_file(&file);
 }
@@ -132,12 +156,15 @@ static void test_load_csv_files(const char *path) {
 
 
 static void test_dataloader() {
-    test_load_csv_file();
+    test_load_csv_file_xxxs_E();
     test_load_csv_file_xs();
     test_load_csv_file_l_D();
+#ifdef LARGE
+    test_load_csv_file_l_A();
+#endif
     test_load_csv_file_l_F();
-//    test_load_csv_files("./test_input/first_part_xs.txt");
-//    test_load_csv_files("./test_input/first_part_m.txt");
+    test_load_csv_files("./test_input/first_part_xxxs.txt");
+    test_load_csv_files("./test_input/first_part_m.txt");
 }
 
 ////////////
@@ -197,7 +224,6 @@ static void test_parse_relation_column() {
 
     EXPECT_RELATION_COLUMN(&rc, 'D', 0);
 
-    free_struct_relation_column(&rc);
     free_struct_parse_context(&c);
 }
 
@@ -212,7 +238,6 @@ static void test_parse_sum() {
 
     EXPECT_RELATION_COLUMN(&rc, 'D', 0);
 
-    free_struct_relation_column(&rc);
     free_struct_parse_context(&c);
 }
 
@@ -346,7 +371,6 @@ static void test_parse_third_line_join() {
     EXPECT_RELATION_COLUMN(&join.rhs, 'C', 0);
 
     free_struct_parse_context(&c);
-    free_struct_join(&join);
 }
 
 static void test_parse_third_line_joins() {
@@ -405,7 +429,6 @@ static void test_parse_fourth_line_predicate() {
     EXPECT_EQ_INT(-2247, p.rhs);
 
     free_struct_parse_context(&c);
-    free_struct_predicate(&p);
 }
 
 static void test_parse_fourth_line_predicates() {
@@ -726,7 +749,9 @@ static void test_predicates() {
     test_predicate_combined();
 
     test_predicate_xxs_1();
-//    test_predicate_m_1();
+#ifdef LARGE
+    test_predicate_m_1();
+#endif
 }
 
 /**
@@ -777,7 +802,7 @@ static void test_join_manual() {
     init_struct_data_frame_for_file(&loaded_files.files[0]);
     init_struct_data_frame_for_file(&loaded_files.files[1]);
 
-    nested_loop_join(&loaded_files, &df, &loaded_files.files[1], &join);
+    sorted_nested_loop_join(&loaded_files, &df, &loaded_files.files[1], &join);
 
     // check result
     // index = 0001
@@ -799,7 +824,7 @@ static void test_join() {
 }
 
 static void test_main() {
-    freopen("./test_input/full_l.txt", "r", stdin);
+    freopen("./test_input/full_xs.txt", "r", stdin);
 
     char *first_part = NULL;
     read_first_part_from_stdin(&first_part);
@@ -844,11 +869,11 @@ static void test_main() {
 int main() {
     // test assert
     ASSERT(1);
-    test_dataloader();
-    test_parse();
-    test_predicates();
-    test_join();
-//    test_main();
+//    test_dataloader();
+//    test_parse();
+//    test_predicates();
+//    test_join();
+    test_main();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;
