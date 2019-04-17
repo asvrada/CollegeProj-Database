@@ -1042,10 +1042,8 @@ $$$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/       $$$$$$$$/  $$$$$$/   $$$$$$$/  $$$
 Created @ http://patorjk.com/software/taag/#p=display&f=Big%20Money-sw&t=Data%20Loader
  */
 
-//const int SIZE_PAGE = 4096;
-//const int SIZE_BUFFER = 2 * SIZE_PAGE;
-//const int NUM_BUFFER_PER_RELATION = 8192;
-
+#define EMPTY -1
+#define LENGTH_FILE_NAME 16
 #define SIZE_PAGE 4096
 #define SIZE_BUFFER (2 * SIZE_PAGE)
 #define NUM_BUFFER_PER_RELATION 8192
@@ -1090,16 +1088,12 @@ typedef struct {
  * Represents each binary file
  */
 typedef struct {
-    FILE *file_binary;
+    // ID of column buffered
+    int column;
 
-    // size (in bytes): NUM_BUFFER_PER_RELATION * SIZE_BUFFER
-    int *pages;
-
-    // the index of first row the pages stores (inclusive)
-    int row_start;
-    // the index of last row the pages stores (exclusive)
-    int row_end;
-} struct_file_binary;
+    // the entire column
+    int *columns;
+} struct_column;
 
 /**
  * A struct that describe a relation
@@ -1111,7 +1105,8 @@ typedef struct {
     /**
      * The struct to the .binary file
      */
-    struct_file_binary file_binary;
+    // todo: this now only buffer some columns from the relation
+    struct_column column;
 
     /**
      * The struct to the .meta file
@@ -1210,26 +1205,17 @@ void free_only_struct_data_frames(struct_files *files) {
     }
 }
 
-void init_struct_file_binary(struct_file_binary *file) {
-    file->file_binary = NULL;
-    file->pages = (int *) malloc(NUM_BUFFER_PER_RELATION * SIZE_BUFFER);
-    memset(file->pages, 0, NUM_BUFFER_PER_RELATION * SIZE_BUFFER);
-    file->row_end = 0;
-    file->row_start = 0;
+void init_struct_column(struct_column *file) {
+    file->column = EMPTY;
+    file->columns = NULL;
 }
 
-void free_struct_file_binary(struct_file_binary *file) {
-    if (file->file_binary != NULL) {
-        fclose(file->file_binary);
-        file->file_binary = NULL;
+void free_struct_column(struct_column *file) {
+    if (file->columns != NULL) {
+        free(file->columns);
     }
-
-    if (file->pages != NULL) {
-        free(file->pages);
-    }
-    file->pages = NULL;
-    file->row_end = 0;
-    file->row_start = 0;
+    file->columns = NULL;
+    file->column = EMPTY;
 }
 
 void init_struct_file(struct_file *file) {
@@ -1238,7 +1224,7 @@ void init_struct_file(struct_file *file) {
     file->num_row = 0;
     file->df = NULL;
 
-    init_struct_file_binary(&file->file_binary);
+    init_struct_column(&file->column);
 }
 
 void free_struct_file(struct_file *file) {
@@ -1253,7 +1239,7 @@ void free_struct_file(struct_file *file) {
         file->df = NULL;
     }
 
-    free_struct_file_binary(&file->file_binary);
+    free_struct_column(&file->column);
 }
 
 void init_struct_files(struct_files *files, int length) {
@@ -1297,6 +1283,13 @@ void free_struct_fwrite_buffer(struct_fwrite_buffer *buffer) {
     buffer->cur_size = 0;
 }
 
+/////////////////////
+// Dataloader Core //
+/////////////////////
+void get_name_file_column(char relation, int column, char *file_name) {
+    sprintf(file_name, "%c%d.binary", relation, column);
+}
+
 /**
  * write content to output buffer
  * The actual file will be write if buffer is almost full
@@ -1333,11 +1326,43 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
     manual_buffer->cur_size = 0;
 }
 
+const int *const select_column_from_file(struct_file *const file, const int column) {
+    // buffer hit
+    if (file->column.column == column) {
+        return file->column.columns;
+    }
+
+    // buffer is NULL
+    if (file->column.column == EMPTY) {
+        // init
+        file->column.columns = (int *) malloc(file->num_row * sizeof(int));
+        file->column.column = column;
+    }
+
+    char *path_file = (char *) malloc(LENGTH_FILE_NAME);
+    get_name_file_column(file->relation, column, path_file);
+
+    FILE *file_column = fopen(path_file, "rb");
+
+    // number of BUFFER_SIZE to read
+    int block = file->num_row * sizeof(int) / SIZE_BUFFER + 1;
+
+    fread(file->column.columns, block * SIZE_BUFFER, 1, file_column);
+    file->column.column = column;
+
+    fclose(file_column);
+    free(path_file);
+    path_file = NULL;
+    return file->column.columns;
+}
+
+#if 0
 /**
  * Select the index of row from file
  * @param file
  * @param row: 0 indexed
  */
+// todo: this should now return a column from disk
 const int *const select_row_from_file(struct_file *const file, const int row) {
     ASSERT(file->num_row > row);
 
@@ -1351,16 +1376,16 @@ const int *const select_row_from_file(struct_file *const file, const int row) {
     const int row_per_buffer = SIZE_BUFFER / byte_per_row;
 
     // if buffered
-    if (file->file_binary.row_start <= row && row < file->file_binary.row_end) {
+    if (file->column.row_start <= row && row < file->column.row_end) {
 #ifdef DEBUG_PROFILING
         count_buffer_hit_query++;
         count_buffer_hit_total++;
 #endif
         // offset (in number of buffers) from the beginning of pages
-        int offset_num_buffer = (row - file->file_binary.row_start) / row_per_buffer;
+        int offset_num_buffer = (row - file->column.row_start) / row_per_buffer;
 
-        return (int *) ((char *) file->file_binary.pages + (offset_num_buffer * SIZE_BUFFER)) +
-               (row - file->file_binary.row_start - offset_num_buffer * row_per_buffer) * file->num_col;
+        return (int *) ((char *) file->column.pages + (offset_num_buffer * SIZE_BUFFER)) +
+               (row - file->column.row_start - offset_num_buffer * row_per_buffer) * file->num_col;
     }
 
 #ifdef DEBUG_PROFILING
@@ -1374,23 +1399,23 @@ const int *const select_row_from_file(struct_file *const file, const int row) {
     // offset in bytes
     size_t offset = offset_num_buffer * SIZE_BUFFER;
     // move pointer to that bytes
-    fseek(file->file_binary.file_binary, offset, SEEK_SET);
+    fseek(file->column.file_binary, offset, SEEK_SET);
 
     // read in pages
-    size_t size_read = fread(file->file_binary.pages, 1, NUM_BUFFER_PER_RELATION * SIZE_BUFFER,
-                             file->file_binary.file_binary);
+    size_t size_read = fread(file->column.pages, 1, NUM_BUFFER_PER_RELATION * SIZE_BUFFER,
+                             file->column.file_binary);
 
     if (size_read == 0) {
         // this should never happen
         ASSERT(0);
     }
 
-    file->file_binary.row_start = offset_num_buffer * row_per_buffer;
-    file->file_binary.row_end = file->file_binary.row_start + row_per_buffer * NUM_BUFFER_PER_RELATION;
+    file->column.row_start = offset_num_buffer * row_per_buffer;
+    file->column.row_end = file->column.row_start + row_per_buffer * NUM_BUFFER_PER_RELATION;
 
     // if size_read is smaller than expected, update row end
     if (size_read < NUM_BUFFER_PER_RELATION * SIZE_BUFFER) {
-        file->file_binary.row_end = file->file_binary.row_start + size_read / SIZE_BUFFER * row_per_buffer;
+        file->column.row_end = file->column.row_start + size_read / SIZE_BUFFER * row_per_buffer;
     }
 
 #ifdef DEBUG_PROFILING
@@ -1399,8 +1424,30 @@ const int *const select_row_from_file(struct_file *const file, const int row) {
     time_total += time_spend;
 #endif
 
-    return file->file_binary.pages +
-           (row - file->file_binary.row_start) * file->num_col;
+    return file->column.pages +
+           (row - file->column.row_start) * file->num_col;
+}
+#endif
+
+/**
+ * Find out how many columns are there by counting number of , in the first line
+ * @param buffer: buffer of the file from disk
+ * @param size: size of this buffer (in bytes)
+ * @return number of column
+ */
+int get_num_col(const char *const buffer, size_t size) {
+    int count = 0;
+    int cursor = 0;
+
+    while (cursor < size && buffer[cursor] != '\n') {
+        if (buffer[cursor] == ',') {
+            count++;
+        }
+
+        cursor++;
+    }
+
+    return count + 1;
 }
 
 /**
@@ -1416,6 +1463,137 @@ const int *const select_row_from_file(struct_file *const file, const int row) {
  * @param file: path to the file on the disk
  * @param loaded_file: struct describing the loaded file
  */
+void load_csv_file_column_store(char relation, char *path_file_csv, struct_file *loaded_file) {
+    // todo meta file
+    FILE *file_csv = fopen(path_file_csv, "r");
+    // array of file*
+    FILE **files_column = NULL;
+
+    /////////////
+    // Buffers //
+    /////////////
+    char *file_name = (char *) malloc(LENGTH_FILE_NAME * sizeof(char));
+    // main buffer to read char from file
+    char *buffer = (char *) malloc(SIZE_BUFFER);
+    char *secondary_buffer = (char *) malloc(64);
+    // length of content stored in the buffer
+    int size_secondary_buffer = 0;
+
+    // one fwrite_buffer for each column
+    struct_fwrite_buffer *fwrite_buffers = NULL;
+
+    int num_col = EMPTY;
+    int num_count = 0;
+
+    while (1) {
+        int size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_csv);
+
+        if (size_buffer == 0) {
+            break;
+        }
+
+        // only execute once at the beginning
+        if (num_col == EMPTY) {
+            num_col = get_num_col(buffer, size_buffer);
+
+            // then init output files
+            files_column = (FILE **) malloc(num_col * sizeof(FILE *));
+            fwrite_buffers = (struct_fwrite_buffer *) malloc(num_col * sizeof(struct_fwrite_buffer));
+
+            for (int i = 0; i < num_col; i++) {
+                // open file
+                get_name_file_column(relation, i, file_name);
+                files_column[i] = fopen(file_name, "wb");
+
+                // init buffer for each column
+                init_struct_fwrite_buffer(&fwrite_buffers[i], SIZE_BUFFER);
+            }
+        }
+
+        int cursor = 0;
+        int cursor_prev = 0;
+
+        while (cursor < size_buffer) {
+            char current = buffer[cursor];
+
+            // we find a new number
+            if (current == ',' || current == '\n') {
+                num_count++;
+                int number = 0;
+
+                if (size_secondary_buffer == 0) {
+                    // simply strtol from buffer
+                    // the number to be read will always be valid because it will end with non-numeric char
+                    number = strtol(&buffer[cursor_prev], NULL, 0);
+                } else {
+                    // this will always occur at the beginning of processing a new buffer
+                    assert(cursor_prev == 0);
+
+                    // copy the beginning of buffer (until cursor) to the end of secondary buffer
+                    memcpy(secondary_buffer + size_secondary_buffer, buffer, cursor);
+                    size_secondary_buffer += cursor;
+                    secondary_buffer[size_secondary_buffer] = '\0';
+
+                    number = strtol(secondary_buffer, NULL, 0);
+
+                    size_secondary_buffer = 0;
+                }
+
+                // move cursor to the beginning of next number
+                cursor += 1;
+                cursor_prev = cursor;
+
+                // store this number to column buffer
+                // which column is this number in?
+                int col = (num_count - 1) % num_col;
+
+                // write number to buffer column
+                fwrite_buffered(&number, sizeof(number), 1, files_column[col], &fwrite_buffers[col]);
+                continue;
+            }
+
+            // this current char is part of the number, skip it
+            cursor++;
+        }
+
+        // we have read the entire buffer, now copy whats left into secondary buffer
+        // only if there is anything left in the main buffer
+        if (cursor_prev < size_buffer) {
+            // always happen at the end of a buffer
+            int length = size_buffer - cursor_prev;
+
+            // copy whats left of buffer into secondary buffer
+            memcpy(secondary_buffer, buffer + cursor_prev, length);
+            size_secondary_buffer = length;
+        }
+    }
+
+    assert(size_secondary_buffer == 0);
+
+    for (int i = 0; i < num_col; i++) {
+        // write whats left inside output buffer to file
+        fwrite_buffered_flush(&fwrite_buffers[i], files_column[i]);
+    }
+
+    loaded_file->relation = relation;
+    loaded_file->num_col = num_col;
+    loaded_file->num_row = num_count / num_col;
+
+    fclose(file_csv);
+
+    for (int i = 0; i < num_col; i++) {
+        fclose(files_column[i]);
+        free_struct_fwrite_buffer(&fwrite_buffers[i]);
+    }
+    free(files_column);
+
+    free(file_name);
+    free(buffer);
+    free(secondary_buffer);
+    free(fwrite_buffers);
+}
+
+#if 0
 void load_csv_file(char relation, char *file, struct_file *loaded_file) {
     // set name for files to write to disk
     char path_file_binary[] = "?.binary";
@@ -1580,6 +1758,7 @@ void load_csv_file(char relation, char *file, struct_file *loaded_file) {
 
     fclose(file_input);
 }
+#endif
 
 /**
  * Given the input files, load them into memory
@@ -1591,7 +1770,8 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
 
     // read each file
     for (int i = 0; i < path_files->length; i++) {
-        load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
+//        load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
+        load_csv_file_column_store((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
     }
 
     // don't free struct_files
@@ -1686,6 +1866,7 @@ int findIndexOf(const char *const input, int length, char val) {
     return -1;
 }
 
+#if 0
 /**
  * Filter data in the relation, given predicate like A.c3 < 7666
  * And create filered index for input file
@@ -2202,6 +2383,7 @@ void execute(struct_files *const loaded_file, const struct_query *const query) {
             count_buffer_total);
 #endif
 }
+#endif
 
 #endif //LITE_DB_LITEDB_C
 
