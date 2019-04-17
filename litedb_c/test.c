@@ -88,7 +88,7 @@ static void test_load_csv_file_l_D() {
     EXPECT_EQ_INT(3495, file.num_row);
     EXPECT_EQ_INT(8, file.num_col);
 
-    int *column = select_column_from_file(&file, 7);
+    const int *column = select_column_from_file(&file, 7);
 
     EXPECT_EQ_INT(-16, column[0]);
     EXPECT_EQ_INT(-39, column[1]);
@@ -97,6 +97,18 @@ static void test_load_csv_file_l_D() {
 
     EXPECT_EQ_INT(0, column[0]);
     EXPECT_EQ_INT(100, column[100]);
+
+    free_struct_file(&file);
+}
+
+static void test_load_csv_file_l_A() {
+    struct_file file;
+    init_struct_file(&file);
+
+    load_csv_file('A', "../data/l/A.csv", &file);
+
+    EXPECT_EQ_INT(10000000, file.num_row);
+    EXPECT_EQ_INT(50, file.num_col);
 
     free_struct_file(&file);
 }
@@ -147,6 +159,9 @@ static void test_dataloader() {
     test_load_csv_file_xxxs_E();
     test_load_csv_file_xs();
     test_load_csv_file_l_D();
+#ifdef LARGE
+    test_load_csv_file_l_A();
+#endif
     test_load_csv_file_l_F();
     test_load_csv_files("./test_input/first_part_xxxs.txt");
     test_load_csv_files("./test_input/first_part_m.txt");
@@ -738,7 +753,9 @@ static void test_predicates() {
     test_predicate_combined();
 
     test_predicate_xxs_1();
+#ifdef LARGE
     test_predicate_m_1();
+#endif
 }
 
 /**
@@ -789,7 +806,7 @@ static void test_join_manual() {
     init_struct_data_frame_for_file(&loaded_files.files[0]);
     init_struct_data_frame_for_file(&loaded_files.files[1]);
 
-    nested_loop_join(&loaded_files, &df, &loaded_files.files[1], &join);
+    sorted_nested_loop_join(&loaded_files, &df, &loaded_files.files[1], &join);
 
     // check result
     // index = 0001
@@ -810,7 +827,6 @@ static void test_join() {
     test_join_manual();
 }
 
-#if 0
 static void test_main() {
     freopen("./test_input/full_xs.txt", "r", stdin);
 
@@ -853,16 +869,15 @@ static void test_main() {
     free_struct_queries(&queries);
     free_struct_files(&loaded_files);
 }
-#endif
 
 int main() {
     // test assert
     ASSERT(1);
-    test_dataloader();
-    test_parse();
-    test_predicates();
-    test_join();
-//    test_main();
+//    test_dataloader();
+//    test_parse();
+//    test_predicates();
+//    test_join();
+    test_main();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;

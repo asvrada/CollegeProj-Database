@@ -86,7 +86,7 @@ SQL query
 2. Relation to join (and on which column)  
 3. Predicates
 
-### Catalog
+### Catalog (todo)
 
 Store metadata about relation and column, like min, max, number of unique value.
 
@@ -104,6 +104,12 @@ Decide the join order
 
 #### Join 
 Sorted Block Nested Loop Join
+
+Read left column (data frame):
+This is not sorted, so sort pairs (number, row)
+
+
+Read right column, and find a equal number from left column 
 
 Todo: with B-tree, we could find if a number is in the relation or not much quicker, without going through the whole file like what we did currently.
 
