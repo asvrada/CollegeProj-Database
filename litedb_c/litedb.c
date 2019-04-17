@@ -1213,8 +1213,8 @@ void init_struct_column(struct_column *file) {
 void free_struct_column(struct_column *file) {
     if (file->columns != NULL) {
         free(file->columns);
+        file->columns = NULL;
     }
-    file->columns = NULL;
     file->column = EMPTY;
 }
 
@@ -1331,15 +1331,9 @@ const int *const select_column_from_file(struct_file *const file, const int colu
     if (file->column.column == column) {
         return file->column.columns;
     }
+    file->column.column = column;
 
-    // buffer is NULL
-    if (file->column.column == EMPTY) {
-        // init
-        file->column.columns = (int *) malloc(file->num_row * sizeof(int));
-        file->column.column = column;
-    }
-
-    char *path_file = (char *) malloc(LENGTH_FILE_NAME);
+    char *path_file = (char *) malloc(LENGTH_FILE_NAME * sizeof(char));
     get_name_file_column(file->relation, column, path_file);
 
     FILE *file_column = fopen(path_file, "rb");
@@ -1347,12 +1341,11 @@ const int *const select_column_from_file(struct_file *const file, const int colu
     // number of BUFFER_SIZE to read
     int block = file->num_row * sizeof(int) / SIZE_BUFFER + 1;
 
-    fread(file->column.columns, block * SIZE_BUFFER, 1, file_column);
-    file->column.column = column;
+    size_t size_read = fread(file->column.columns, SIZE_BUFFER, block, file_column);
+    assert(size_read != 0);
 
     fclose(file_column);
     free(path_file);
-    path_file = NULL;
     return file->column.columns;
 }
 
@@ -1486,7 +1479,7 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     int num_count = 0;
 
     while (1) {
-        int size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_csv);
+        int size_buffer = fread(buffer, sizeof(buffer[0]), SIZE_BUFFER, file_csv);
 
         if (size_buffer == 0) {
             break;
@@ -1496,14 +1489,19 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
         if (num_col == EMPTY) {
             num_col = get_num_col(buffer, size_buffer);
 
+            loaded_file->column.columns = (int *) malloc(num_col * sizeof(int));
+
             // then init output files
             files_column = (FILE **) malloc(num_col * sizeof(FILE *));
             fwrite_buffers = (struct_fwrite_buffer *) malloc(num_col * sizeof(struct_fwrite_buffer));
 
             for (int i = 0; i < num_col; i++) {
+                files_column[i] = NULL;
                 // open file
                 get_name_file_column(relation, i, file_name);
+
                 files_column[i] = fopen(file_name, "wb");
+                assert(files_column[i] != NULL);
 
                 // init buffer for each column
                 init_struct_fwrite_buffer(&fwrite_buffers[i], SIZE_BUFFER);
@@ -1586,11 +1584,11 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
         free_struct_fwrite_buffer(&fwrite_buffers[i]);
     }
     free(files_column);
+    free(fwrite_buffers);
 
     free(file_name);
     free(buffer);
     free(secondary_buffer);
-    free(fwrite_buffers);
 }
 
 #if 0
