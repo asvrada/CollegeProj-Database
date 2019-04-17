@@ -1384,7 +1384,7 @@ int get_num_col(const char *const buffer, size_t size) {
  * @param file: path to the file on the disk
  * @param loaded_file: struct describing the loaded file
  */
-void load_csv_file_column_store(char relation, char *path_file_csv, struct_file *loaded_file) {
+void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file) {
     // todo meta file
     FILE *file_csv = fopen(path_file_csv, "r");
     // array of file*
@@ -1394,7 +1394,7 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     // Buffers //
     /////////////
     char file_name[LENGTH_FILE_NAME] = {'\0'};
-    
+
     // main buffer to read char from file
     char *buffer = (char *) malloc(SIZE_BUFFER);
     memset(buffer, 0, SIZE_BUFFER);
@@ -1533,7 +1533,7 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
     // read each file
     for (int i = 0; i < path_files->length; i++) {
 //        load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
-        load_csv_file_column_store((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
+        load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
     }
 
     // don't free struct_files
@@ -1628,7 +1628,6 @@ int findIndexOf(const char *const input, int length, char val) {
     return -1;
 }
 
-#if 0
 /**
  * Filter data in the relation, given predicate like A.c3 < 7666
  * And create filered index for input file
@@ -1649,6 +1648,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
         init_struct_data_frame_for_file(file);
     }
 
+    // empty data frame, do nothing
     if (file->df->num_row == 0) {
         return;
     }
@@ -1667,12 +1667,13 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
     int number = 0;
     int shouldKeep = 0;
 
+    const int *const columns = select_column_from_file(file, column);
+
     // for each row
     for (; fast < row; fast++) {
         shouldKeep = 0;
         // check predicate
-        const int *const tmp_row = select_row_from_file(file, df->index[fast]);
-        number = tmp_row[column];
+        number = columns[df->index[fast]];
 
         switch (predicate->operator) {
             case EQUAL:
@@ -1718,6 +1719,22 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
     }
 }
 
+/**
+ * (Left deep) join two columns(represented by data frame) from two relation
+ *
+ * @param loaded_files
+ * @param intermediate
+ * @param relation
+ * @param join
+ */
+void sorted_nested_loop_join(const struct_files *const loaded_files,
+                             struct_data_frame *const intermediate,
+                             struct_file *const relation,
+                             const struct_join *join) {
+
+}
+
+#if 0
 /**
  * (Left Deep) Join two data frame that representing some relations
  * We assume the input is always valid
@@ -1905,7 +1922,6 @@ void nested_loop_join(const struct_files *const loaded_files,
     free(buffer_outer_loop);
     free(intermediate_index_row);
 }
-
 
 void nested_loop_join_both_joined_before(const struct_files *const loaded_files,
                                          struct_data_frame *const intermediate,

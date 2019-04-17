@@ -37,7 +37,7 @@ static void test_load_csv_file_xxxs_E() {
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file_column_store('E', "../data/xxxs/E.csv", &file);
+    load_csv_file('E', "../data/xxxs/E.csv", &file);
 
     EXPECT_EQ_INT(2, file.num_row);
     EXPECT_EQ_INT(5, file.num_col);
@@ -59,7 +59,7 @@ static void test_load_csv_file_xs() {
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file_column_store('A', "../data/xs/A.csv", &file);
+    load_csv_file('A', "../data/xs/A.csv", &file);
 
     EXPECT_EQ_INT(50000, file.num_row);
     EXPECT_EQ_INT(50, file.num_col);
@@ -83,7 +83,7 @@ static void test_load_csv_file_l_D() {
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file_column_store('D', "../data/l/D.csv", &file);
+    load_csv_file('D', "../data/l/D.csv", &file);
 
     EXPECT_EQ_INT(3495, file.num_row);
     EXPECT_EQ_INT(8, file.num_col);
@@ -105,7 +105,7 @@ static void test_load_csv_file_l_F() {
     struct_file file;
     init_struct_file(&file);
 
-    load_csv_file_column_store('F', "../data/l/F.csv", &file);
+    load_csv_file('F', "../data/l/F.csv", &file);
 
     EXPECT_EQ_INT(2041, file.num_row);
     EXPECT_EQ_INT(14, file.num_col);
@@ -152,7 +152,6 @@ static void test_dataloader() {
     test_load_csv_files("./test_input/first_part_m.txt");
 }
 
-#if  0
 ////////////
 // Parser //
 ////////////
@@ -739,7 +738,7 @@ static void test_predicates() {
     test_predicate_combined();
 
     test_predicate_xxs_1();
-//    test_predicate_m_1();
+    test_predicate_m_1();
 }
 
 /**
@@ -811,6 +810,7 @@ static void test_join() {
     test_join_manual();
 }
 
+#if 0
 static void test_main() {
     freopen("./test_input/full_xs.txt", "r", stdin);
 
@@ -859,9 +859,9 @@ int main() {
     // test assert
     ASSERT(1);
     test_dataloader();
-//    test_parse();
-//    test_predicates();
-//    test_join();
+    test_parse();
+    test_predicates();
+    test_join();
 //    test_main();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
