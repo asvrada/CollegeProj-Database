@@ -88,7 +88,7 @@ static void test_load_csv_file_l_D() {
     EXPECT_EQ_INT(3495, file.num_row);
     EXPECT_EQ_INT(8, file.num_col);
 
-    const int *column = select_column_from_file(&file, 7);
+    int *column = select_column_from_file(&file, 7);
 
     EXPECT_EQ_INT(-16, column[0]);
     EXPECT_EQ_INT(-39, column[1]);
@@ -144,12 +144,12 @@ static void test_load_csv_files(const char *path) {
 
 
 static void test_dataloader() {
-    test_load_csv_file_xxxs_E();
-    test_load_csv_file_xs();
+//    test_load_csv_file_xxxs_E();
+//    test_load_csv_file_xs();
     test_load_csv_file_l_D();
-    test_load_csv_file_l_F();
-    test_load_csv_files("./test_input/first_part_xxxs.txt");
-    test_load_csv_files("./test_input/first_part_m.txt");
+//    test_load_csv_file_l_F();
+//    test_load_csv_files("./test_input/first_part_xxxs.txt");
+//    test_load_csv_files("./test_input/first_part_m.txt");
 }
 
 #if  0

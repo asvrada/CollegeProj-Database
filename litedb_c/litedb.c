@@ -1298,7 +1298,7 @@ void fwrite_buffered(void *buffer, size_t size, size_t count, FILE *stream, stru
     size_t size_buffer = size * count;
 
     // manual buffer is full
-    if (manual_buffer->cur_size + size_buffer > manual_buffer->max_size) {
+    if (manual_buffer->cur_size == manual_buffer->max_size) {
         // we write the entire block into disk, so it's page aligned
         fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->max_size, stream);
 
@@ -1320,32 +1320,33 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
     }
 
     // write entire buffer into disk, so it's page aligned
-    fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->max_size, stream);
+    fwrite(manual_buffer->buffer, sizeof(*manual_buffer->buffer), manual_buffer->cur_size, stream);
 
     // buffer is now empty
     manual_buffer->cur_size = 0;
 }
 
-const int *const select_column_from_file(struct_file *const file, const int column) {
+int * select_column_from_file(struct_file *const file, const int column) {
     // buffer hit
     if (file->column.column == column) {
         return file->column.columns;
     }
+    
     file->column.column = column;
 
-    char *path_file = (char *) malloc(LENGTH_FILE_NAME * sizeof(char));
+    char path_file[LENGTH_FILE_NAME] = {'\0'};
     get_name_file_column(file->relation, column, path_file);
 
     FILE *file_column = fopen(path_file, "rb");
+    fseek(file_column, 0, SEEK_END);
+    size_t file_size = ftell(file_column);
+    fseek(file_column, 0, SEEK_SET);
 
-    // number of BUFFER_SIZE to read
-    int block = file->num_row * sizeof(int) / SIZE_BUFFER + 1;
-
-    size_t size_read = fread(file->column.columns, SIZE_BUFFER, block, file_column);
-    assert(size_read != 0);
+    size_t size_read = fread(file->column.columns, 1, file_size, file_column);
+    assert(size_read == file_size);
 
     fclose(file_column);
-    free(path_file);
+//    free(path_file);
     return file->column.columns;
 }
 
@@ -1465,10 +1466,12 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     /////////////
     // Buffers //
     /////////////
-    char *file_name = (char *) malloc(LENGTH_FILE_NAME * sizeof(char));
+    char file_name[LENGTH_FILE_NAME] = {'\0'};
     // main buffer to read char from file
     char *buffer = (char *) malloc(SIZE_BUFFER);
+    memset(buffer, 0, SIZE_BUFFER);
     char *secondary_buffer = (char *) malloc(64);
+    memset(secondary_buffer, 0, 64);
     // length of content stored in the buffer
     int size_secondary_buffer = 0;
 
@@ -1577,6 +1580,9 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     loaded_file->num_col = num_col;
     loaded_file->num_row = num_count / num_col;
 
+    /////////////
+    // cleanup //
+    /////////////
     fclose(file_csv);
 
     for (int i = 0; i < num_col; i++) {
@@ -1586,177 +1592,10 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     free(files_column);
     free(fwrite_buffers);
 
-    free(file_name);
+//    free(file_name);
     free(buffer);
     free(secondary_buffer);
 }
-
-#if 0
-void load_csv_file(char relation, char *file, struct_file *loaded_file) {
-    // set name for files to write to disk
-    char path_file_binary[] = "?.binary";
-    char path_file_meta[] = "?.meta";
-    path_file_binary[0] = relation;
-    path_file_meta[0] = relation;
-
-    // freed at the end of this function
-    FILE *file_input = fopen(file, "r");
-    FILE *file_binary = fopen(path_file_binary, "wb");
-    // todo: file_meta
-    // FILE *file_meta
-
-    // main buffer to read char from file
-    char *buffer = (char *) malloc(SIZE_BUFFER);
-    char *secondary_buffer = (char *) malloc(64);
-    // length of content stored in the buffer
-    int size_secondary_buffer = 0;
-
-    struct_fwrite_buffer fwrite_buffer;
-    // init buffer
-    init_struct_fwrite_buffer(&fwrite_buffer, SIZE_BUFFER);
-
-    int num_row = 0;
-    int num_col = -1;
-    int tmp_num_col = 0;
-
-    // we use the stack to store the first line of csv file, because we don't know the number of column
-    // freed after processing the first line of csv file
-    struct_parse_context c;
-    init_struct_parse_context(&c, NULL);
-
-    // buffer for storing numbers in the same row
-    int *buffer_row = NULL;
-    // number of int currently stored, if == num_col, write the buffer_row to output buffer and empty buffer
-    int size_buffer_row = 0;
-
-    while (1) {
-        int size_buffer = fread(buffer, sizeof(*buffer), SIZE_BUFFER, file_input);
-
-        if (size_buffer == 0) {
-            break;
-        }
-
-        int cursor = 0;
-        int cursor_prev = 0;
-
-        while (cursor < size_buffer) {
-            char current = buffer[cursor];
-
-            // if its end of number
-            if (current == ',' || current == '\n') {
-                if (num_col == -1) {
-                    tmp_num_col++;
-
-                    // This is the end of first line
-                    // We do:
-                    // 1. assign num_col
-                    // 2. create row buffer
-                    // 3. move content inside stack into row buffer
-                    if (current == '\n') {
-                        // 1. assign num_col
-                        num_col = tmp_num_col;
-
-                        // 2. create row buffer
-                        // find out size of stack, plus one because the last number is not pushed into the stack
-                        size_t top = c.top;
-                        size_t num_bytes_buffer_row = num_col * sizeof(int);
-                        // freed at the end of this function
-                        buffer_row = (int *) malloc(num_bytes_buffer_row);
-
-                        // 3. move content inside stack into row buffer
-                        // copy content from stack into buffer row
-                        memcpy(buffer_row, context_pop(&c, top), top);
-                        size_buffer_row = top / sizeof(int);
-                        // free stack
-                        free_struct_parse_context(&c);
-                    }
-                }
-
-                int number = 0;
-
-                if (size_secondary_buffer == 0) {
-                    // simply strtol from buffer
-                    // the number to be read will always be valid because it will end with non-numeric char
-                    number = strtol(&buffer[cursor_prev], NULL, 0);
-                } else {
-                    // this will always occur at the beginning of processing a new buffer
-                    assert(cursor_prev == 0);
-
-                    // copy the beginning of buffer (until cursor) to the end of secondary buffer
-                    memcpy(secondary_buffer + size_secondary_buffer, buffer, cursor);
-                    size_secondary_buffer += cursor;
-                    secondary_buffer[size_secondary_buffer] = '\0';
-
-                    number = strtol(secondary_buffer, NULL, 0);
-
-                    size_secondary_buffer = 0;
-                }
-
-                // move cursor to the beginning of next number
-                cursor += 1;
-                cursor_prev = cursor;
-
-                // if still processing first line, output number to stack
-                if (num_col == -1) {
-                    *(int *) context_push(&c, sizeof(number)) = number;
-                } else {
-                    // write number to buffer row
-                    buffer_row[size_buffer_row] = number;
-                    size_buffer_row++;
-                }
-
-                // if buffer row is full, write to output buffer, and empty it
-                // this also means row++
-                if (size_buffer_row == num_col) {
-                    fwrite_buffered(buffer_row, sizeof(buffer_row[0]), size_buffer_row, file_binary, &fwrite_buffer);
-                    size_buffer_row = 0;
-                    num_row++;
-                }
-                continue;
-            }
-
-            // this current char is part of the number, skip it
-            cursor++;
-        }
-
-        // we have read the entire buffer, now copy whats left into secondary buffer
-        // only if there is anything left in the main buffer
-        if (cursor_prev < size_buffer) {
-            // always happen at the end of a buffer
-            int length = size_buffer - cursor_prev;
-
-            // copy whats left of buffer into secondary buffer
-            memcpy(secondary_buffer, buffer + cursor_prev, length);
-            size_secondary_buffer = length;
-        }
-    }
-
-    // todo: handle when csv has no newline at the end
-
-    assert(size_buffer_row == 0);
-
-    // write whats left inside output buffer to file
-    if (fwrite_buffer.cur_size != 0) {
-        fwrite_buffered_flush(&fwrite_buffer, file_binary);
-    }
-
-    fclose(file_binary);
-
-    // assign value to loaded_file
-    loaded_file->relation = relation;
-    loaded_file->file_binary.file_binary = fopen(path_file_binary, "r");
-    loaded_file->num_col = num_col;
-    loaded_file->num_row = num_row;
-
-
-    free(buffer);
-    free(secondary_buffer);
-    free(buffer_row);
-    free_struct_fwrite_buffer(&fwrite_buffer);
-
-    fclose(file_input);
-}
-#endif
 
 /**
  * Given the input files, load them into memory
