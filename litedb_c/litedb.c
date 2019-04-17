@@ -1103,9 +1103,8 @@ typedef struct {
     char relation;
 
     /**
-     * The struct to the .binary file
+     * buffer of one column
      */
-    // todo: this now only buffer some columns from the relation
     struct_column column;
 
     /**
@@ -1326,7 +1325,7 @@ void fwrite_buffered_flush(struct_fwrite_buffer *manual_buffer, FILE *stream) {
     manual_buffer->cur_size = 0;
 }
 
-int * select_column_from_file(struct_file *const file, const int column) {
+int *select_column_from_file(struct_file *const file, const int column) {
     // buffer hit
     if (file->column.column == column) {
         return file->column.columns;
@@ -1350,79 +1349,6 @@ int * select_column_from_file(struct_file *const file, const int column) {
     fclose(file_column);
     return file->column.columns;
 }
-
-#if 0
-/**
- * Select the index of row from file
- * @param file
- * @param row: 0 indexed
- */
-// todo: this should now return a column from disk
-const int *const select_row_from_file(struct_file *const file, const int row) {
-    ASSERT(file->num_row > row);
-
-#ifdef DEBUG_PROFILING
-    count_buffer_total++;
-    count_buffer_total_query++;
-#endif
-
-    // 1. calculate offset in bytes to read from disk
-    const int byte_per_row = file->num_col * sizeof(int);
-    const int row_per_buffer = SIZE_BUFFER / byte_per_row;
-
-    // if buffered
-    if (file->column.row_start <= row && row < file->column.row_end) {
-#ifdef DEBUG_PROFILING
-        count_buffer_hit_query++;
-        count_buffer_hit_total++;
-#endif
-        // offset (in number of buffers) from the beginning of pages
-        int offset_num_buffer = (row - file->column.row_start) / row_per_buffer;
-
-        return (int *) ((char *) file->column.pages + (offset_num_buffer * SIZE_BUFFER)) +
-               (row - file->column.row_start - offset_num_buffer * row_per_buffer) * file->num_col;
-    }
-
-#ifdef DEBUG_PROFILING
-    time_t start = time(NULL);
-#endif
-
-    // offset (in number of buffers) from the beginning of file
-    int offset_num_buffer = row / row_per_buffer;
-
-    // not buffered, read pages into buffer
-    // offset in bytes
-    size_t offset = offset_num_buffer * SIZE_BUFFER;
-    // move pointer to that bytes
-    fseek(file->column.file_binary, offset, SEEK_SET);
-
-    // read in pages
-    size_t size_read = fread(file->column.pages, 1, NUM_BUFFER_PER_RELATION * SIZE_BUFFER,
-                             file->column.file_binary);
-
-    if (size_read == 0) {
-        // this should never happen
-        ASSERT(0);
-    }
-
-    file->column.row_start = offset_num_buffer * row_per_buffer;
-    file->column.row_end = file->column.row_start + row_per_buffer * NUM_BUFFER_PER_RELATION;
-
-    // if size_read is smaller than expected, update row end
-    if (size_read < NUM_BUFFER_PER_RELATION * SIZE_BUFFER) {
-        file->column.row_end = file->column.row_start + size_read / SIZE_BUFFER * row_per_buffer;
-    }
-
-#ifdef DEBUG_PROFILING
-    long time_spend = time(NULL) - start;
-    time_query += time_spend;
-    time_total += time_spend;
-#endif
-
-    return file->column.pages +
-           (row - file->column.row_start) * file->num_col;
-}
-#endif
 
 /**
  * Find out how many columns are there by counting number of , in the first line
@@ -1468,11 +1394,12 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     // Buffers //
     /////////////
     char file_name[LENGTH_FILE_NAME] = {'\0'};
+    
     // main buffer to read char from file
     char *buffer = (char *) malloc(SIZE_BUFFER);
     memset(buffer, 0, SIZE_BUFFER);
-    char *secondary_buffer = (char *) malloc(64);
-    memset(secondary_buffer, 0, 64);
+
+    char secondary_buffer[64] = {'\0'};
     // length of content stored in the buffer
     int size_secondary_buffer = 0;
 
@@ -1593,7 +1520,6 @@ void load_csv_file_column_store(char relation, char *path_file_csv, struct_file 
     free(fwrite_buffers);
 
     free(buffer);
-    free(secondary_buffer);
 }
 
 /**
