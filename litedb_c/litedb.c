@@ -1505,7 +1505,6 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
 
     // read each file
     for (int i = 0; i < path_files->length; i++) {
-//        load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
         load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
     }
 
@@ -1680,7 +1679,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
  * @param relation
  * @param join
  */
- //todo: buffer outer loop
+//todo: buffer outer loop
 void sorted_nested_loop_join(const struct_files *const loaded_files,
                              struct_data_frame *const intermediate,
                              struct_file *const relation,
@@ -1703,10 +1702,11 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
     relations_joined[length_joined_relations - 2] = relation->relation;
     relations_joined[length_joined_relations - 1] = '\0';
 
-    // todo: check if one of the df is empty, and don't init if isn't empty
+    // check if one of the df is empty, and don't init if isn't empty
     // Init df for right hand side file
+    int is_right_df_null = 0;
     if (relation->df == NULL) {
-        init_struct_data_frame_for_file(relation);
+        is_right_df_null = 1;
     }
 
     /////////////////////////////////////////
@@ -1731,7 +1731,7 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
     ///////////////////////////
     // Buffer for outer loop //
     ///////////////////////////
-    // todo: since a entire column can always fit in memeory, we read them in and sort
+    // todo: mem full: since a entire column can always fit in memeory, we read them in and sort
     // buffer numbers in a column as a pair (number, row), sort buffer by number
     int length_buffer_outer_loop = intermediate->num_row;
     struct_number_row *buffer_outer_loop = (struct_number_row *) malloc(
@@ -1750,8 +1750,11 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
 
     // inner loop
     // binary search the each number from the right relation in the left relation
-    for (int row_relation = 0; row_relation < relation->df->num_row; row_relation++) {
-        const int number_right = column_right[relation->df->index[row_relation]];
+    for (int row_relation = 0;
+         row_relation < (is_right_df_null ? relation->num_row : relation->df->num_row);
+         row_relation++) {
+        const int number_right = is_right_df_null ? column_right[row_relation]
+                                                  : column_right[relation->df->index[row_relation]];
 
         struct_number_row key;
         key.number = number_right;
@@ -1786,7 +1789,7 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
                    &(intermediate->index[buffer_outer_loop[i].row * num_relations_before]),
                    size_to_copy);
 
-            *(int *) context_push(&c, sizeof(int)) = relation->df->index[row_relation];
+            *(int *) context_push(&c, sizeof(int)) = is_right_df_null ? row_relation : relation->df->index[row_relation];
         }
     }
 
@@ -1805,23 +1808,28 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
     if (top == 0) {
         intermediate->index = NULL;
         intermediate->num_row = 0;
+        free_struct_parse_context(&c);
     } else {
-        // memcpy
+        // directly use the stack's memory, without creating new space and copying
         int *tmp_index = context_pop(&c, top);
-        intermediate->index = (int *) malloc(top);
-        memcpy(intermediate->index, tmp_index, top);
+        // manually empty c
+        c.top = 0;
+        c.size = 0;
+        c.stack = NULL;
+
+        intermediate->index = realloc(tmp_index, top);
 
         // bytes / sizeof int / number per row = num of row
         intermediate->num_row = top / strlen(intermediate->relations) / sizeof(int);
     }
 
-    free_struct_parse_context(&c);
+    // don't free struct_parser
     free(buffer_outer_loop);
 }
 
 void sorted_nested_loop_join_both_joined_before(const struct_files *const loaded_files,
-                                         struct_data_frame *const intermediate,
-                                         const struct_join *join) {
+                                                struct_data_frame *const intermediate,
+                                                const struct_join *join) {
     ASSERT(loaded_files != NULL && intermediate != NULL && join != NULL);
 
     // we use the stack again
@@ -1975,7 +1983,7 @@ void execute_sums(struct_files *const loaded_file,
 
         const int *const columns = select_column_from_file(file, rc->column);
 
-        for (int i = 0; i < result->num_row;i++) {
+        for (int i = 0; i < result->num_row; i++) {
             ans[col] += columns[result->index[i * num_relations + offset]];
         }
     }
