@@ -8,6 +8,7 @@
 #define LITE_DB_LITEDB_C
 
 //#define DEBUG_PROFILING 1
+//#define DEBUG_STACK_SIZE 1
 
 #ifdef DEBUG_PROFILING
 #include <time.h>
@@ -197,7 +198,7 @@ static void *context_push(struct_parse_context *c, size_t size) {
             // expand the size to 1.5 times the original size
             // size += size / 2
             c->size += c->size >> 1;
-#if 0
+#if DEBUG_STACK_SIZE
             printf("stack size: %zu KB\n", c->size / 1024);
 #endif
         }
@@ -1004,6 +1005,27 @@ void read_second_part_from_stdin(char **input) {
 }
 
 /*
+  ______               __                __
+ /      \             /  |              /  |
+/$$$$$$  |  ______   _$$ |_     ______  $$ |  ______    ______
+$$ |  $$/  /      \ / $$   |   /      \ $$ | /      \  /      \
+$$ |       $$$$$$  |$$$$$$/    $$$$$$  |$$ |/$$$$$$  |/$$$$$$  |
+$$ |   __  /    $$ |  $$ | __  /    $$ |$$ |$$ |  $$ |$$ |  $$ |
+$$ \__/  |/$$$$$$$ |  $$ |/  |/$$$$$$$ |$$ |$$ \__$$ |$$ \__$$ |
+$$    $$/ $$    $$ |  $$  $$/ $$    $$ |$$ |$$    $$/ $$    $$ |
+ $$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/ $$/  $$$$$$/   $$$$$$$ |
+                                                      /  \__$$ |
+                                                      $$    $$/
+                                                       $$$$$$/
+ */
+
+typedef struct {
+    int min;
+    int max;
+    int unique;
+} struct_meta_column;
+
+/*
  _______               __                      __                                  __
 /       \             /  |                    /  |                                /  |
 $$$$$$$  |  ______   _$$ |_     ______        $$ |        ______    ______    ____$$ |  ______    ______
@@ -1084,9 +1106,8 @@ typedef struct {
     /**
      * The struct to the .meta file
      */
-//    FILE* file_meta;
+    struct_meta_column *meta;
 
-    // todo: move them into metadata
     // number of column and rows in the relation
     int num_col;
     int num_row;
@@ -1198,6 +1219,7 @@ void init_struct_file(struct_file *file) {
     file->df = NULL;
 
     init_struct_column(&file->column);
+    file->meta = NULL;
 }
 
 void free_struct_file(struct_file *file) {
@@ -1213,6 +1235,7 @@ void free_struct_file(struct_file *file) {
     }
 
     free_struct_column(&file->column);
+    free(file->meta);
 }
 
 void init_struct_files(struct_files *files, int length) {
@@ -1359,10 +1382,12 @@ int get_num_col(const char *const buffer, size_t size) {
  * @param loaded_file: struct describing the loaded file
  */
 void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file) {
-    // todo meta file
     FILE *file_csv = fopen(path_file_csv, "r");
     // array of file*
     FILE **files_column = NULL;
+
+    // meta data for each column
+    struct_meta_column *meta = NULL;
 
     /////////////
     // Buffers //
@@ -1396,6 +1421,8 @@ void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file)
 
             // then init output files
             files_column = (FILE **) malloc(num_col * sizeof(FILE *));
+            // init meta data
+            meta = (struct_meta_column *) malloc(num_col * sizeof(struct_meta_column));
             fwrite_buffers = (struct_fwrite_buffer *) malloc(num_col * sizeof(struct_fwrite_buffer));
 
             for (int i = 0; i < num_col; i++) {
@@ -1405,6 +1432,11 @@ void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file)
 
                 files_column[i] = fopen(file_name, "wb");
                 assert(files_column[i] != NULL);
+
+                // init meta data
+                meta[i].max = INT32_MIN;
+                meta[i].min = INT32_MAX;
+                meta[i].unique = -1;
 
                 // init buffer for each column
                 init_struct_fwrite_buffer(&fwrite_buffers[i], SIZE_BUFFER);
@@ -1450,6 +1482,15 @@ void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file)
 
                 // write number to buffer column
                 fwrite_buffered(&number, sizeof(number), 1, files_column[col], &fwrite_buffers[col]);
+
+                // update meta data
+                if (meta[col].max < number) {
+                    meta[col].max = number;
+                }
+
+                if (meta[col].min > number) {
+                    meta[col].min = number;
+                }
             } else {
                 // this current char is part of the number, skip it
                 cursor++;
@@ -1470,15 +1511,21 @@ void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file)
 
     assert(size_secondary_buffer == 0);
 
+    int num_row = num_count / num_col;
+
     for (int i = 0; i < num_col; i++) {
         // write whats left inside output buffer to file
         fwrite_buffered_flush(&fwrite_buffers[i], files_column[i]);
+
+        // calculate unique number for each column
+        meta[i].unique = num_row < meta[i].max - meta[i].min ? num_row : meta[i].max - meta[i].min;
     }
 
     loaded_file->relation = relation;
     loaded_file->num_col = num_col;
-    loaded_file->num_row = num_count / num_col;
+    loaded_file->num_row = num_row;
     loaded_file->column.columns = (int *) malloc(loaded_file->num_row * sizeof(int));
+    loaded_file->meta = meta;
 
     /////////////
     // cleanup //
@@ -1624,7 +1671,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
     // for each row
     for (; fast < row; fast++) {
         shouldKeep = 0;
-        // check predicate
+        // get the number to be compared
         number = columns[df->index[fast]];
 
         switch (predicate->operator) {
@@ -1789,7 +1836,8 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
                    &(intermediate->index[buffer_outer_loop[i].row * num_relations_before]),
                    size_to_copy);
 
-            *(int *) context_push(&c, sizeof(int)) = is_right_df_null ? row_relation : relation->df->index[row_relation];
+            *(int *) context_push(&c, sizeof(int)) = is_right_df_null ? row_relation
+                                                                      : relation->df->index[row_relation];
         }
     }
 
@@ -1905,6 +1953,14 @@ void execute_selects(struct_files *const loaded_file, const struct_fourth_line *
 }
 
 /**
+ * Re-order the joins
+ */
+// todo
+void optimize_joins(struct_files *const files, struct_third_line *const tl) {
+
+}
+
+/**
  * Execute all the joins, and assign the result to *result
  *
  * @param loaded_file
@@ -1917,7 +1973,6 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
         return;
     }
 
-    // todo: simplify this!
     char first_relation = tl->joins[0].lhs.relation;
     struct_file *first_file = &loaded_file->files[first_relation - 'A'];
 
@@ -1998,17 +2053,19 @@ void execute_sums(struct_files *const loaded_file,
  *
  * @param query
  */
-void execute(struct_files *const loaded_file, const struct_query *const query) {
+void execute(struct_files *const loaded_file, struct_query *const query) {
 #ifdef DEBUG_PROFILING
     time_query = 0;
     count_buffer_hit_query = 0;
     count_buffer_total_query = 0;
 #endif
-
     // select
     execute_selects(loaded_file, &query->fourth);
 
     struct_data_frame result;
+
+    // optimize join order
+    optimize_joins(loaded_file, &query->third);
 
     // join
     execute_joins(loaded_file, &query->third, &result);

@@ -42,6 +42,12 @@ static void test_load_csv_file_xxxs_E() {
     EXPECT_EQ_INT(2, file.num_row);
     EXPECT_EQ_INT(5, file.num_col);
 
+    EXPECT_EQ_INT(0, file.meta[0].max);
+    EXPECT_EQ_INT(-1, file.meta[0].min);
+
+    EXPECT_EQ_INT(1328, file.meta[4].max);
+    EXPECT_EQ_INT(-1834, file.meta[4].min);
+
     const int *column = select_column_from_file(&file, 0);
 
     EXPECT_EQ_INT(-1, column[0]);
@@ -583,6 +589,31 @@ static void test_read_first_part() {
     free(input);
 }
 
+static void test_parse_full(char *path) {
+    freopen(path, "r", stdin);
+
+    char *first_part = NULL;
+    read_first_part_from_stdin(&first_part);
+
+    char *second_part = NULL;
+    read_second_part_from_stdin(&second_part);
+
+    // handle path to files
+    struct_input_files files;
+    init_struct_input_files(&files);
+
+    // parse first part
+    parse_first_part(&files, first_part);
+
+    // parse queries
+    struct_queries queries;
+    parse_second_part(&queries, second_part);
+
+    free(first_part);
+    free(second_part);
+    free_struct_input_files(&files);
+}
+
 static void test_parse() {
     // test parser first part
     test_parse_first_part();
@@ -616,6 +647,10 @@ static void test_parse() {
     // second part
     test_parse_second_part();
     test_parse_second_part_from_stdin();
+
+    test_parse_full("./test_input/full_xs.txt");
+    test_parse_full("./test_input/full_l.txt");
+    test_parse_full("./test_input/full_l2.txt");
 }
 
 // test A.c0 = 4422
