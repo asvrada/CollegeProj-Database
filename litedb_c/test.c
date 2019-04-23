@@ -612,6 +612,7 @@ static void test_parse_full(char *path) {
     free(first_part);
     free(second_part);
     free_struct_input_files(&files);
+    free_struct_queries(&queries);
 }
 
 static void test_parse() {
