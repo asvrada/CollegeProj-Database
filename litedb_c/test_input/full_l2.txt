@@ -1,0 +1,17 @@
+../data/l2/A.csv,../data/l2/C.csv,../data/l2/B.csv,../data/l2/F.csv,../data/l2/E.csv,../data/l2/D.csv
+3
+SELECT SUM(A.c3), SUM(B.c1), SUM(F.c0)
+FROM B, C, A, F
+WHERE A.c1 = B.c2 AND B.c0 = F.c0 AND C.c0 = B.c1
+AND A.c3 = 1500 AND F.c22 > 220 AND B.c2 = 500;
+
+SELECT SUM(A.c2)
+FROM E, D, A
+WHERE A.c0 = D.c0 AND A.c0 = E.c0
+AND E.c1 = 5000 AND A.c2 > 0 AND E.c3 > 500 AND E.c4 < 0;
+
+SELECT SUM(A.c3), SUM(B.c1), SUM(F.c0)
+FROM A, B, C, E, F
+WHERE A.c3 = B.c0 AND A.c0 = C.c0 AND C.c1 = E.c0 AND B.c1 = F.c42
+AND A.c0 = 0 AND C.c1 = 910 AND B.c2 = 0 AND E.c23 < -200 AND F.c12 < -100;
+
