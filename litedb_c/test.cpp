@@ -909,7 +909,7 @@ int main() {
 //    test_parse();
 //    test_predicates();
 //    test_join();
-//    test_main();
+    test_main();
 
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return 0;

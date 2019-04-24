@@ -22,6 +22,15 @@ static long count_buffer_hit_total = 0;
 static long count_buffer_total = 0;
 #endif
 
+/////////////////
+// C++ library //
+/////////////////
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <string>
+#include <sstream>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -1573,13 +1582,177 @@ $$    $$/ $$    $$/   $$  $$/ $$ |$$ | $$ | $$ |$$ |/$$      |$$       |$$ |
           $$/
  */
 
+const std::string vector_to_string(const std::vector<int> &v) {
+    std::stringstream ss;
+    for (auto it = v.begin(); it != v.end(); it++) {
+        ss << *it << '-';
+    }
+
+    return ss.str();
+}
+
+/**
+ * Calculate the cost of join r + order and order + r, return the one with smaller cost
+ *
+ * @param prev_order: order of previsou join clauses
+ * @param join: index to the join clause
+ * @param plan: where we put the order after this join
+ * @return cost of this join order, INT32_MAX if impossible to join
+ */
+int cost(const std::vector<int> &prev_order,
+         const int join,
+         std::vector<int> &plan,
+         const std::vector<const struct_join *> &joins) {
+
+    // todo: if first join, it's true
+
+    ///////////////////////////////
+    // check if join is possible //
+    ///////////////////////////////
+    // the join clause we want to evaluate
+    const struct_join *new_join = joins[join];
+
+    //////////////
+    // join left?
+    /////////////
+    // first join in joins should be able to join with join
+    bool can_join_left = false;
+    std::unordered_set<char> sets;
+    sets.insert(new_join->lhs.relation);
+    sets.insert(new_join->rhs.relation);
+
+    // check if the first join in the previous join order is inside the set
+    const struct_join *first = joins[prev_order[0]];
+
+    if (sets.find(first->lhs.relation) != sets.end()
+        || sets.find(first->rhs.relation) != sets.end()) {
+        can_join_left = true;
+    }
+
+    ////////////////
+    // join right?
+    ///////////////
+    // either lhs or rhs of join should be in the joining tree
+    bool can_join_right = false;
+
+    // add all joined relations to the set
+    sets.clear();
+    for (auto i:prev_order) {
+        sets.insert(joins[i]->lhs.relation);
+        sets.insert(joins[i]->rhs.relation);
+    }
+
+    // check if right join is possible
+    if (sets.find(new_join->lhs.relation) != sets.end()
+        || sets.find(new_join->rhs.relation) != sets.end()) {
+        can_join_right = true;
+    }
+
+    // this order of join is impossible
+    if (!(can_join_left || can_join_right)) {
+        return INT32_MAX;
+    }
+
+    /////////////////////////////////////////////////////////
+    // calculate new cost for join orders that are possible
+    /////////////////////////////////////////////////////////
+    int cost = INT32_MAX;
+    // can join left, calculate cost
+    if (can_join_left) {
+
+    }
+
+    // can join right, calculate cost
+    if (can_join_right) {
+
+    }
+
+    // todo: update plan
+    plan.clear();
+    if (can_join_left) {
+        plan.push_back(join);
+        plan.insert(plan.begin() + 1, prev_order.begin(), prev_order.end());
+    } else if (can_join_right) {
+        plan.insert(plan.begin(), prev_order.begin(), prev_order.end());
+        plan.push_back(join);
+    }
+
+    return cost;
+}
+
+/**
+ * Compute the best join order, given join clauses as rels
+ *
+ * @param rels: index of join clauses to join, should be sorted, ascending
+ * @param best: map from joins to the best order of joining them
+ * @param joins: join clauses
+ * @return best join order of rels
+ */
+std::vector<int> compute_best(const std::vector<int> &rels,
+                              std::unordered_map<std::string, std::vector<int>> &best,
+                              const std::vector<const struct_join *> &joins) {
+    auto key = vector_to_string(rels);
+    if (best.find(key) != best.end()) {
+        return best[key];
+    }
+
+    // current join plan
+    std::vector<int> curr_plan;
+    int curr_cost = INT32_MAX;
+
+    for (int i = 0; i < rels.size(); i++) {
+        // make a copy so we can modify
+        std::vector<int> tmp(rels);
+        // delete tmp[i]
+        tmp.erase(tmp.begin() + i);
+
+        // todo: join itself
+        // recursivly get the sub join order
+        auto internal_order = compute_best(tmp, best, joins);
+
+        // check [r] + order || order + [r]
+        std::vector<int> plan;
+        auto plan_cost = cost(internal_order, i, plan, joins);
+
+        if (plan_cost <= curr_cost) {
+            curr_plan = plan;
+            curr_cost = plan_cost;
+        }
+    }
+
+    // todo: what if there is no join possible
+    best[key] = curr_plan;
+
+    return curr_plan;
+}
 
 /**
  * Re-order the joins
  */
 // todo
 void optimize_joins(struct_files *const files, struct_query *const query) {
+    // init joins and rels
+    std::vector<int> rels;
+    std::vector<const struct_join *> joins;
+    for (int i = 0; i < query->third.length; i++) {
+        rels.push_back(i);
+        joins.push_back(&query->third.joins[i]);
+    }
 
+    // init best
+    std::vector<int> order;
+    std::unordered_map<std::string, std::vector<int>> best;
+    for (int i = 0; i < joins.size(); i++) {
+        order.clear();
+        order.push_back(i);
+        auto tmp = vector_to_string(order);
+
+        best[tmp] = order;
+    }
+
+
+    auto best_join_order = compute_best(rels, best, joins);
+    // todo: apply this order to query->third
 }
 
 /*
@@ -1883,13 +2056,13 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
         free_struct_parse_context(&c);
     } else {
         // directly use the stack's memory, without creating new space and copying
-        int *tmp_index = (int*) context_pop(&c, top);
+        int *tmp_index = (int *) context_pop(&c, top);
         // manually empty c
         c.top = 0;
         c.size = 0;
         c.stack = NULL;
 
-        intermediate->index = (int*) realloc(tmp_index, top);
+        intermediate->index = (int *) realloc(tmp_index, top);
 
         // bytes / sizeof int / number per row = num of row
         intermediate->num_row = top / strlen(intermediate->relations) / sizeof(int);
@@ -1950,7 +2123,7 @@ void sorted_nested_loop_join_both_joined_before(const struct_files *const loaded
         intermediate->num_row = 0;
     } else {
         // memcpy
-        int *tmp_index = (int*)context_pop(&c, top);
+        int *tmp_index = (int *) context_pop(&c, top);
         intermediate->index = (int *) malloc(top);
         memcpy(intermediate->index, tmp_index, top);
 
