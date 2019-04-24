@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "litedb.c"
+#include "litedb.cpp"
 
 /*
  * 1. read first part

@@ -30,6 +30,7 @@ static long count_buffer_total = 0;
 #include <vector>
 #include <string>
 #include <sstream>
+#include <iostream>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1602,7 +1603,7 @@ const std::string vector_to_string(const std::vector<int> &v) {
 int cost(const std::vector<int> &prev_order,
          const int join,
          std::vector<int> &plan,
-         const std::vector<const struct_join *> &joins) {
+         const std::vector<struct_join *> &joins) {
 
     // todo: if first join, it's true
 
@@ -1690,7 +1691,7 @@ int cost(const std::vector<int> &prev_order,
  */
 std::vector<int> compute_best(const std::vector<int> &rels,
                               std::unordered_map<std::string, std::vector<int>> &best,
-                              const std::vector<const struct_join *> &joins) {
+                              const std::vector<struct_join *> &joins) {
     auto key = vector_to_string(rels);
     if (best.find(key) != best.end()) {
         return best[key];
@@ -1700,19 +1701,25 @@ std::vector<int> compute_best(const std::vector<int> &rels,
     std::vector<int> curr_plan;
     int curr_cost = INT32_MAX;
 
+    // tmp vector
+    std::vector<int> plan;
     for (int i = 0; i < rels.size(); i++) {
         // make a copy so we can modify
         std::vector<int> tmp(rels);
         // delete tmp[i]
         tmp.erase(tmp.begin() + i);
 
-        // todo: join itself
         // recursivly get the sub join order
         auto internal_order = compute_best(tmp, best, joins);
 
+        if (internal_order.empty()) {
+            // no join possible
+            continue;
+        }
+
         // check [r] + order || order + [r]
-        std::vector<int> plan;
-        auto plan_cost = cost(internal_order, i, plan, joins);
+        // todo: join itself
+        auto plan_cost = cost(internal_order, rels[i], plan, joins);
 
         if (plan_cost <= curr_cost) {
             curr_plan = plan;
@@ -1733,7 +1740,7 @@ std::vector<int> compute_best(const std::vector<int> &rels,
 void optimize_joins(struct_files *const files, struct_query *const query) {
     // init joins and rels
     std::vector<int> rels;
-    std::vector<const struct_join *> joins;
+    std::vector<struct_join *> joins;
     for (int i = 0; i < query->third.length; i++) {
         rels.push_back(i);
         joins.push_back(&query->third.joins[i]);
@@ -1749,10 +1756,21 @@ void optimize_joins(struct_files *const files, struct_query *const query) {
 
         best[tmp] = order;
     }
-
-
+    
     auto best_join_order = compute_best(rels, best, joins);
-    // todo: apply this order to query->third
+    
+    // apply this order to query->third
+    auto third = query->third.joins;
+
+    // make a copy of joins
+    std::vector<struct_join> tmp_joins;
+    for (auto each: joins) {
+        tmp_joins.push_back(*each);
+    }
+
+    for (int i = 0; i < best_join_order.size(); i++) {
+        third[i] = tmp_joins[best_join_order[i]];
+    }
 }
 
 /*
