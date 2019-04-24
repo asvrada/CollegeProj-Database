@@ -8,6 +8,7 @@
 #define LITE_DB_LITEDB_C
 
 //#define DEBUG_PROFILING 1
+//#define DEBUG_STACK_SIZE 1
 
 #ifdef DEBUG_PROFILING
 #include <time.h>
@@ -20,6 +21,16 @@ static long count_buffer_total_query = 0;
 static long count_buffer_hit_total = 0;
 static long count_buffer_total = 0;
 #endif
+
+/////////////////
+// C++ library //
+/////////////////
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <iostream>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -131,7 +142,7 @@ typedef struct {
 // D.c3 < -9496
 typedef struct {
     struct_relation_column lhs;
-    enum_operator operator;
+    enum_operator op;
     int rhs;
 } struct_predicate;
 
@@ -197,7 +208,7 @@ static void *context_push(struct_parse_context *c, size_t size) {
             // expand the size to 1.5 times the original size
             // size += size / 2
             c->size += c->size >> 1;
-#if 0
+#if DEBUG_STACK_SIZE
             printf("stack size: %zu KB\n", c->size / 1024);
 #endif
         }
@@ -217,7 +228,7 @@ static void *context_push(struct_parse_context *c, size_t size) {
 static void init_struct_input_files(struct_input_files *files) {
     files->length = 0;
 
-    files->files = malloc(26 * sizeof(char *));
+    files->files = (char **) malloc(26 * sizeof(char *));
     for (int i = 0; i < 26; i++) {
         files->files[i] = NULL;
     }
@@ -330,7 +341,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
         // end of relation
         if (ch == '.') {
             size_t len = c->top - head;
-            const char *relation = context_pop(c, len);
+            const char *relation = (char *) context_pop(c, len);
 
             // copy this relation
             relation_column->relation = *relation;
@@ -360,7 +371,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
         if (!IS_NUMERIC(ch)) {
             size_t len = c->top - head;
             // string of number, no terminal
-            const char *str = context_pop(c, len);
+            const char *str = (char *) context_pop(c, len);
 
             char *tmp_str = (char *) malloc(len + 1);
             memcpy(tmp_str, str, len);
@@ -437,7 +448,7 @@ int parse_first_line_sums(struct_parse_context *c, struct_first_line *v) {
 
     // pop
     size_t len = c->top - head;
-    const struct_relation_column *rcs = context_pop(c, len);
+    const struct_relation_column *rcs = (struct_relation_column *) context_pop(c, len);
 
     v->sums = (struct_relation_column *) malloc(len);
     memcpy(v->sums, rcs, len);
@@ -510,7 +521,7 @@ int parse_second_line_relations(struct_parse_context *c, struct_second_line *v) 
     }
 
     size_t len = c->top - head;
-    const char *relations = context_pop(c, len);
+    const char *relations = (char *) context_pop(c, len);
 
     // len = number of alphabets
     v->relations = (char *) malloc(len + 1);
@@ -592,7 +603,7 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
     size_t head = c->top;
 
     // first join
-    join = malloc(sizeof(struct_join));
+    join = (struct_join *) malloc(sizeof(struct_join));
     parse_third_line_join(c, join);
 
     // push into context
@@ -607,7 +618,7 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
         parse_whitespace(c);
 
         // following joins
-        join = malloc(sizeof(struct_join));
+        join = (struct_join *) malloc(sizeof(struct_join));
         parse_third_line_join(c, join);
 
         // push into context
@@ -616,9 +627,9 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
     }
 
     size_t len = c->top - head;
-    const struct_join *joins = context_pop(c, len);
+    const struct_join *joins = (struct_join *) context_pop(c, len);
 
-    tl->joins = malloc(len);
+    tl->joins = (struct_join *) malloc(len);
     memcpy(tl->joins, joins, len);
     tl->length = len / sizeof(struct_join);
 
@@ -689,7 +700,7 @@ int parse_fourth_line_predicate(struct_parse_context *c, struct_predicate *p) {
 
     // skip ws Op ws
     parse_whitespace(c);
-    parse_operator(c, &p->operator);
+    parse_operator(c, &p->op);
     parse_whitespace(c);
 
     parse_number(c, &p->rhs);
@@ -710,7 +721,7 @@ int parse_fourth_line_predicates(struct_parse_context *c, struct_fourth_line *fl
     size_t head = c->top;
 
     // first predicate
-    p = malloc(sizeof(struct_predicate));
+    p = (struct_predicate *) malloc(sizeof(struct_predicate));
     parse_fourth_line_predicate(c, p);
 
     // push into context
@@ -723,7 +734,7 @@ int parse_fourth_line_predicates(struct_parse_context *c, struct_fourth_line *fl
         parse_whitespace(c);
 
         // following predicates
-        p = malloc(sizeof(struct_predicate));
+        p = (struct_predicate *) malloc(sizeof(struct_predicate));
         parse_fourth_line_predicate(c, p);
 
         // push into context
@@ -732,9 +743,9 @@ int parse_fourth_line_predicates(struct_parse_context *c, struct_fourth_line *fl
     }
 
     size_t len = c->top - head;
-    const struct_predicate *predicates = context_pop(c, len);
+    const struct_predicate *predicates = (struct_predicate *) context_pop(c, len);
 
-    fl->predicates = malloc(len);
+    fl->predicates = (struct_predicate *) malloc(len);
     memcpy(fl->predicates, predicates, len);
     fl->length = len / sizeof(struct_predicate);
 
@@ -813,7 +824,7 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
 
     size_t head = c->top;
 
-    query = malloc(sizeof(struct_query));
+    query = (struct_query *) malloc(sizeof(struct_query));
     parse_query(c, query);
 
     // push into context
@@ -824,7 +835,7 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
     while (c->input[0] == 'S') {
         parse_whitespace(c);
 
-        query = malloc(sizeof(struct_query));
+        query = (struct_query *) malloc(sizeof(struct_query));
         parse_query(c, query);
 
         // push into context
@@ -833,9 +844,9 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
     }
 
     size_t len = c->top - head;
-    const struct_query *tmp_queries = context_pop(c, len);
+    const struct_query *tmp_queries = (struct_query *) context_pop(c, len);
 
-    queries->queries = malloc(len);
+    queries->queries = (struct_query *) malloc(len);
     memcpy(queries->queries, tmp_queries, len);
     queries->length = len / sizeof(struct_query);
 
@@ -988,7 +999,7 @@ void read_second_part_from_stdin(char **input) {
     line = NULL;
 
     size_t len = c.top;
-    const char *tmp_input = context_pop(&c, len);
+    const char *tmp_input = (char *) context_pop(&c, len);
 
     // malloc memory for *input and copy the input to it
     *input = (char *) malloc(len + 1);
@@ -1002,6 +1013,27 @@ void read_second_part_from_stdin(char **input) {
 
     free_struct_parse_context(&c);
 }
+
+/*
+  ______               __                __
+ /      \             /  |              /  |
+/$$$$$$  |  ______   _$$ |_     ______  $$ |  ______    ______
+$$ |  $$/  /      \ / $$   |   /      \ $$ | /      \  /      \
+$$ |       $$$$$$  |$$$$$$/    $$$$$$  |$$ |/$$$$$$  |/$$$$$$  |
+$$ |   __  /    $$ |  $$ | __  /    $$ |$$ |$$ |  $$ |$$ |  $$ |
+$$ \__/  |/$$$$$$$ |  $$ |/  |/$$$$$$$ |$$ |$$ \__$$ |$$ \__$$ |
+$$    $$/ $$    $$ |  $$  $$/ $$    $$ |$$ |$$    $$/ $$    $$ |
+ $$$$$$/   $$$$$$$/    $$$$/   $$$$$$$/ $$/  $$$$$$/   $$$$$$$ |
+                                                      /  \__$$ |
+                                                      $$    $$/
+                                                       $$$$$$/
+ */
+
+typedef struct {
+    int min;
+    int max;
+    int unique;
+} struct_meta_column;
 
 /*
  _______               __                      __                                  __
@@ -1084,9 +1116,8 @@ typedef struct {
     /**
      * The struct to the .meta file
      */
-//    FILE* file_meta;
+    struct_meta_column *meta;
 
-    // todo: move them into metadata
     // number of column and rows in the relation
     int num_col;
     int num_row;
@@ -1198,6 +1229,7 @@ void init_struct_file(struct_file *file) {
     file->df = NULL;
 
     init_struct_column(&file->column);
+    file->meta = NULL;
 }
 
 void free_struct_file(struct_file *file) {
@@ -1213,10 +1245,11 @@ void free_struct_file(struct_file *file) {
     }
 
     free_struct_column(&file->column);
+    free(file->meta);
 }
 
 void init_struct_files(struct_files *files, int length) {
-    files->files = malloc(length * sizeof(struct_file));
+    files->files = (struct_file *) malloc(length * sizeof(struct_file));
     files->length = length;
 
     for (int i = 0; i < length; i++) {
@@ -1359,10 +1392,12 @@ int get_num_col(const char *const buffer, size_t size) {
  * @param loaded_file: struct describing the loaded file
  */
 void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file) {
-    // todo meta file
     FILE *file_csv = fopen(path_file_csv, "r");
     // array of file*
     FILE **files_column = NULL;
+
+    // meta data for each column
+    struct_meta_column *meta = NULL;
 
     /////////////
     // Buffers //
@@ -1396,6 +1431,8 @@ void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file)
 
             // then init output files
             files_column = (FILE **) malloc(num_col * sizeof(FILE *));
+            // init meta data
+            meta = (struct_meta_column *) malloc(num_col * sizeof(struct_meta_column));
             fwrite_buffers = (struct_fwrite_buffer *) malloc(num_col * sizeof(struct_fwrite_buffer));
 
             for (int i = 0; i < num_col; i++) {
@@ -1405,6 +1442,11 @@ void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file)
 
                 files_column[i] = fopen(file_name, "wb");
                 assert(files_column[i] != NULL);
+
+                // init meta data
+                meta[i].max = INT32_MIN;
+                meta[i].min = INT32_MAX;
+                meta[i].unique = -1;
 
                 // init buffer for each column
                 init_struct_fwrite_buffer(&fwrite_buffers[i], SIZE_BUFFER);
@@ -1450,6 +1492,15 @@ void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file)
 
                 // write number to buffer column
                 fwrite_buffered(&number, sizeof(number), 1, files_column[col], &fwrite_buffers[col]);
+
+                // update meta data
+                if (meta[col].max < number) {
+                    meta[col].max = number;
+                }
+
+                if (meta[col].min > number) {
+                    meta[col].min = number;
+                }
             } else {
                 // this current char is part of the number, skip it
                 cursor++;
@@ -1470,15 +1521,21 @@ void load_csv_file(char relation, char *path_file_csv, struct_file *loaded_file)
 
     assert(size_secondary_buffer == 0);
 
+    int num_row = num_count / num_col;
+
     for (int i = 0; i < num_col; i++) {
         // write whats left inside output buffer to file
         fwrite_buffered_flush(&fwrite_buffers[i], files_column[i]);
+
+        // calculate unique number for each column
+        meta[i].unique = num_row < meta[i].max - meta[i].min ? num_row : meta[i].max - meta[i].min;
     }
 
     loaded_file->relation = relation;
     loaded_file->num_col = num_col;
-    loaded_file->num_row = num_count / num_col;
+    loaded_file->num_row = num_row;
     loaded_file->column.columns = (int *) malloc(loaded_file->num_row * sizeof(int));
+    loaded_file->meta = meta;
 
     /////////////
     // cleanup //
@@ -1505,11 +1562,215 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
 
     // read each file
     for (int i = 0; i < path_files->length; i++) {
-//        load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
         load_csv_file((char) (i + 'A'), path_files->files[i], &loaded_files->files[i]);
     }
 
     // don't free struct_files
+}
+
+/*
+  ______               __      __                __
+ /      \             /  |    /  |              /  |
+/$$$$$$  |  ______   _$$ |_   $$/  _____  ____  $$/  ________   ______    ______
+$$ |  $$ | /      \ / $$   |  /  |/     \/    \ /  |/        | /      \  /      \
+$$ |  $$ |/$$$$$$  |$$$$$$/   $$ |$$$$$$ $$$$  |$$ |$$$$$$$$/ /$$$$$$  |/$$$$$$  |
+$$ |  $$ |$$ |  $$ |  $$ | __ $$ |$$ | $$ | $$ |$$ |  /  $$/  $$    $$ |$$ |  $$/
+$$ \__$$ |$$ |__$$ |  $$ |/  |$$ |$$ | $$ | $$ |$$ | /$$$$/__ $$$$$$$$/ $$ |
+$$    $$/ $$    $$/   $$  $$/ $$ |$$ | $$ | $$ |$$ |/$$      |$$       |$$ |
+ $$$$$$/  $$$$$$$/     $$$$/  $$/ $$/  $$/  $$/ $$/ $$$$$$$$/  $$$$$$$/ $$/
+          $$ |
+          $$ |
+          $$/
+ */
+
+const std::string vector_to_string(const std::vector<int> &v) {
+    std::stringstream ss;
+    for (auto it = v.begin(); it != v.end(); it++) {
+        ss << *it << '-';
+    }
+
+    return ss.str();
+}
+
+/**
+ * Calculate the cost of join r + order and order + r, return the one with smaller cost
+ *
+ * @param prev_order: order of previsou join clauses
+ * @param join: index to the join clause
+ * @param plan: where we put the order after this join
+ * @return cost of this join order, INT32_MAX if impossible to join
+ */
+int cost(const std::vector<int> &prev_order,
+         const int join,
+         std::vector<int> &plan,
+         const std::vector<struct_join *> &joins) {
+
+    // todo: if first join, it's true
+
+    ///////////////////////////////
+    // check if join is possible //
+    ///////////////////////////////
+    // the join clause we want to evaluate
+    const struct_join *new_join = joins[join];
+
+    //////////////
+    // join left?
+    /////////////
+    // first join in joins should be able to join with join
+    bool can_join_left = false;
+    std::unordered_set<char> sets;
+    sets.insert(new_join->lhs.relation);
+    sets.insert(new_join->rhs.relation);
+
+    // check if the first join in the previous join order is inside the set
+    const struct_join *first = joins[prev_order[0]];
+
+    if (sets.find(first->lhs.relation) != sets.end()
+        || sets.find(first->rhs.relation) != sets.end()) {
+        can_join_left = true;
+    }
+
+    ////////////////
+    // join right?
+    ///////////////
+    // either lhs or rhs of join should be in the joining tree
+    bool can_join_right = false;
+
+    // add all joined relations to the set
+    sets.clear();
+    for (auto i:prev_order) {
+        sets.insert(joins[i]->lhs.relation);
+        sets.insert(joins[i]->rhs.relation);
+    }
+
+    // check if right join is possible
+    if (sets.find(new_join->lhs.relation) != sets.end()
+        || sets.find(new_join->rhs.relation) != sets.end()) {
+        can_join_right = true;
+    }
+
+    // this order of join is impossible
+    if (!(can_join_left || can_join_right)) {
+        return INT32_MAX;
+    }
+
+    /////////////////////////////////////////////////////////
+    // calculate new cost for join orders that are possible
+    /////////////////////////////////////////////////////////
+    int cost = INT32_MAX;
+    // can join left, calculate cost
+    if (can_join_left) {
+
+    }
+
+    // can join right, calculate cost
+    if (can_join_right) {
+
+    }
+
+    // todo: update plan
+    plan.clear();
+    if (can_join_left) {
+        plan.push_back(join);
+        plan.insert(plan.begin() + 1, prev_order.begin(), prev_order.end());
+    } else if (can_join_right) {
+        plan.insert(plan.begin(), prev_order.begin(), prev_order.end());
+        plan.push_back(join);
+    }
+
+    return cost;
+}
+
+/**
+ * Compute the best join order, given join clauses as rels
+ *
+ * @param rels: index of join clauses to join, should be sorted, ascending
+ * @param best: map from joins to the best order of joining them
+ * @param joins: join clauses
+ * @return best join order of rels
+ */
+std::vector<int> compute_best(const std::vector<int> &rels,
+                              std::unordered_map<std::string, std::vector<int>> &best,
+                              const std::vector<struct_join *> &joins) {
+    auto key = vector_to_string(rels);
+    if (best.find(key) != best.end()) {
+        return best[key];
+    }
+
+    // current join plan
+    std::vector<int> curr_plan;
+    int curr_cost = INT32_MAX;
+
+    // tmp vector
+    std::vector<int> plan;
+    for (int i = 0; i < rels.size(); i++) {
+        // make a copy so we can modify
+        std::vector<int> tmp(rels);
+        // delete tmp[i]
+        tmp.erase(tmp.begin() + i);
+
+        // recursivly get the sub join order
+        auto internal_order = compute_best(tmp, best, joins);
+
+        if (internal_order.empty()) {
+            // no join possible
+            continue;
+        }
+
+        // check [r] + order || order + [r]
+        // todo: join itself
+        auto plan_cost = cost(internal_order, rels[i], plan, joins);
+
+        if (plan_cost <= curr_cost) {
+            curr_plan = plan;
+            curr_cost = plan_cost;
+        }
+    }
+
+    // todo: what if there is no join possible
+    best[key] = curr_plan;
+
+    return curr_plan;
+}
+
+/**
+ * Re-order the joins
+ */
+// todo
+void optimize_joins(struct_files *const files, struct_query *const query) {
+    // init joins and rels
+    std::vector<int> rels;
+    std::vector<struct_join *> joins;
+    for (int i = 0; i < query->third.length; i++) {
+        rels.push_back(i);
+        joins.push_back(&query->third.joins[i]);
+    }
+
+    // init best
+    std::vector<int> order;
+    std::unordered_map<std::string, std::vector<int>> best;
+    for (int i = 0; i < joins.size(); i++) {
+        order.clear();
+        order.push_back(i);
+        auto tmp = vector_to_string(order);
+
+        best[tmp] = order;
+    }
+    
+    auto best_join_order = compute_best(rels, best, joins);
+    
+    // apply this order to query->third
+    auto third = query->third.joins;
+
+    // make a copy of joins
+    std::vector<struct_join> tmp_joins;
+    for (auto each: joins) {
+        tmp_joins.push_back(*each);
+    }
+
+    for (int i = 0; i < best_join_order.size(); i++) {
+        third[i] = tmp_joins[best_join_order[i]];
+    }
 }
 
 /*
@@ -1625,10 +1886,10 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
     // for each row
     for (; fast < row; fast++) {
         shouldKeep = 0;
-        // check predicate
+        // get the number to be compared
         number = columns[df->index[fast]];
 
-        switch (predicate->operator) {
+        switch (predicate->op) {
             case EQUAL:
                 if (number == predicate->rhs) {
                     shouldKeep = 1;
@@ -1680,7 +1941,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
  * @param relation
  * @param join
  */
- //todo: buffer outer loop
+//todo: buffer outer loop
 void sorted_nested_loop_join(const struct_files *const loaded_files,
                              struct_data_frame *const intermediate,
                              struct_file *const relation,
@@ -1703,10 +1964,11 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
     relations_joined[length_joined_relations - 2] = relation->relation;
     relations_joined[length_joined_relations - 1] = '\0';
 
-    // todo: check if one of the df is empty, and don't init if isn't empty
+    // check if one of the df is empty, and don't init if isn't empty
     // Init df for right hand side file
+    int is_right_df_null = 0;
     if (relation->df == NULL) {
-        init_struct_data_frame_for_file(relation);
+        is_right_df_null = 1;
     }
 
     /////////////////////////////////////////
@@ -1731,7 +1993,7 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
     ///////////////////////////
     // Buffer for outer loop //
     ///////////////////////////
-    // todo: since a entire column can always fit in memeory, we read them in and sort
+    // todo: mem full: since a entire column can always fit in memeory, we read them in and sort
     // buffer numbers in a column as a pair (number, row), sort buffer by number
     int length_buffer_outer_loop = intermediate->num_row;
     struct_number_row *buffer_outer_loop = (struct_number_row *) malloc(
@@ -1750,13 +2012,16 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
 
     // inner loop
     // binary search the each number from the right relation in the left relation
-    for (int row_relation = 0; row_relation < relation->df->num_row; row_relation++) {
-        const int number_right = column_right[relation->df->index[row_relation]];
+    for (int row_relation = 0;
+         row_relation < (is_right_df_null ? relation->num_row : relation->df->num_row);
+         row_relation++) {
+        const int number_right = is_right_df_null ? column_right[row_relation]
+                                                  : column_right[relation->df->index[row_relation]];
 
         struct_number_row key;
         key.number = number_right;
 
-        struct_number_row *res = bsearch(
+        struct_number_row *res = (struct_number_row *) bsearch(
                 &key, buffer_outer_loop,
                 length_buffer_outer_loop,
                 sizeof(struct_number_row),
@@ -1786,7 +2051,8 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
                    &(intermediate->index[buffer_outer_loop[i].row * num_relations_before]),
                    size_to_copy);
 
-            *(int *) context_push(&c, sizeof(int)) = relation->df->index[row_relation];
+            *(int *) context_push(&c, sizeof(int)) = is_right_df_null ? row_relation
+                                                                      : relation->df->index[row_relation];
         }
     }
 
@@ -1805,23 +2071,28 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
     if (top == 0) {
         intermediate->index = NULL;
         intermediate->num_row = 0;
+        free_struct_parse_context(&c);
     } else {
-        // memcpy
-        int *tmp_index = context_pop(&c, top);
-        intermediate->index = (int *) malloc(top);
-        memcpy(intermediate->index, tmp_index, top);
+        // directly use the stack's memory, without creating new space and copying
+        int *tmp_index = (int *) context_pop(&c, top);
+        // manually empty c
+        c.top = 0;
+        c.size = 0;
+        c.stack = NULL;
+
+        intermediate->index = (int *) realloc(tmp_index, top);
 
         // bytes / sizeof int / number per row = num of row
         intermediate->num_row = top / strlen(intermediate->relations) / sizeof(int);
     }
 
-    free_struct_parse_context(&c);
+    // don't free struct_parser
     free(buffer_outer_loop);
 }
 
 void sorted_nested_loop_join_both_joined_before(const struct_files *const loaded_files,
-                                         struct_data_frame *const intermediate,
-                                         const struct_join *join) {
+                                                struct_data_frame *const intermediate,
+                                                const struct_join *join) {
     ASSERT(loaded_files != NULL && intermediate != NULL && join != NULL);
 
     // we use the stack again
@@ -1870,7 +2141,7 @@ void sorted_nested_loop_join_both_joined_before(const struct_files *const loaded
         intermediate->num_row = 0;
     } else {
         // memcpy
-        int *tmp_index = context_pop(&c, top);
+        int *tmp_index = (int *) context_pop(&c, top);
         intermediate->index = (int *) malloc(top);
         memcpy(intermediate->index, tmp_index, top);
 
@@ -1896,6 +2167,7 @@ void execute_selects(struct_files *const loaded_file, const struct_fourth_line *
     }
 }
 
+
 /**
  * Execute all the joins, and assign the result to *result
  *
@@ -1909,7 +2181,6 @@ void execute_joins(struct_files *const loaded_file, const struct_third_line *con
         return;
     }
 
-    // todo: simplify this!
     char first_relation = tl->joins[0].lhs.relation;
     struct_file *first_file = &loaded_file->files[first_relation - 'A'];
 
@@ -1975,7 +2246,7 @@ void execute_sums(struct_files *const loaded_file,
 
         const int *const columns = select_column_from_file(file, rc->column);
 
-        for (int i = 0; i < result->num_row;i++) {
+        for (int i = 0; i < result->num_row; i++) {
             ans[col] += columns[result->index[i * num_relations + offset]];
         }
     }
@@ -1990,17 +2261,19 @@ void execute_sums(struct_files *const loaded_file,
  *
  * @param query
  */
-void execute(struct_files *const loaded_file, const struct_query *const query) {
+void execute(struct_files *const loaded_file, struct_query *const query) {
 #ifdef DEBUG_PROFILING
     time_query = 0;
     count_buffer_hit_query = 0;
     count_buffer_total_query = 0;
 #endif
-
     // select
     execute_selects(loaded_file, &query->fourth);
 
     struct_data_frame result;
+
+    // optimize join order
+    optimize_joins(loaded_file, query);
 
     // join
     execute_joins(loaded_file, &query->third, &result);

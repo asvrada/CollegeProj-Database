@@ -22,6 +22,16 @@ static long count_buffer_hit_total = 0;
 static long count_buffer_total = 0;
 #endif
 
+/////////////////
+// C++ library //
+/////////////////
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <iostream>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -132,7 +142,7 @@ typedef struct {
 // D.c3 < -9496
 typedef struct {
     struct_relation_column lhs;
-    enum_operator operator;
+    enum_operator op;
     int rhs;
 } struct_predicate;
 
@@ -218,7 +228,7 @@ static void *context_push(struct_parse_context *c, size_t size) {
 static void init_struct_input_files(struct_input_files *files) {
     files->length = 0;
 
-    files->files = malloc(26 * sizeof(char *));
+    files->files = (char **) malloc(26 * sizeof(char *));
     for (int i = 0; i < 26; i++) {
         files->files[i] = NULL;
     }
@@ -331,7 +341,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
         // end of relation
         if (ch == '.') {
             size_t len = c->top - head;
-            const char *relation = context_pop(c, len);
+            const char *relation = (char *) context_pop(c, len);
 
             // copy this relation
             relation_column->relation = *relation;
@@ -361,7 +371,7 @@ int parse_relation_column(struct_parse_context *c, struct_relation_column *relat
         if (!IS_NUMERIC(ch)) {
             size_t len = c->top - head;
             // string of number, no terminal
-            const char *str = context_pop(c, len);
+            const char *str = (char *) context_pop(c, len);
 
             char *tmp_str = (char *) malloc(len + 1);
             memcpy(tmp_str, str, len);
@@ -438,7 +448,7 @@ int parse_first_line_sums(struct_parse_context *c, struct_first_line *v) {
 
     // pop
     size_t len = c->top - head;
-    const struct_relation_column *rcs = context_pop(c, len);
+    const struct_relation_column *rcs = (struct_relation_column *) context_pop(c, len);
 
     v->sums = (struct_relation_column *) malloc(len);
     memcpy(v->sums, rcs, len);
@@ -511,7 +521,7 @@ int parse_second_line_relations(struct_parse_context *c, struct_second_line *v) 
     }
 
     size_t len = c->top - head;
-    const char *relations = context_pop(c, len);
+    const char *relations = (char *) context_pop(c, len);
 
     // len = number of alphabets
     v->relations = (char *) malloc(len + 1);
@@ -593,7 +603,7 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
     size_t head = c->top;
 
     // first join
-    join = malloc(sizeof(struct_join));
+    join = (struct_join *) malloc(sizeof(struct_join));
     parse_third_line_join(c, join);
 
     // push into context
@@ -608,7 +618,7 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
         parse_whitespace(c);
 
         // following joins
-        join = malloc(sizeof(struct_join));
+        join = (struct_join *) malloc(sizeof(struct_join));
         parse_third_line_join(c, join);
 
         // push into context
@@ -617,9 +627,9 @@ int parse_third_line_joins(struct_parse_context *c, struct_third_line *tl) {
     }
 
     size_t len = c->top - head;
-    const struct_join *joins = context_pop(c, len);
+    const struct_join *joins = (struct_join *) context_pop(c, len);
 
-    tl->joins = malloc(len);
+    tl->joins = (struct_join *) malloc(len);
     memcpy(tl->joins, joins, len);
     tl->length = len / sizeof(struct_join);
 
@@ -690,7 +700,7 @@ int parse_fourth_line_predicate(struct_parse_context *c, struct_predicate *p) {
 
     // skip ws Op ws
     parse_whitespace(c);
-    parse_operator(c, &p->operator);
+    parse_operator(c, &p->op);
     parse_whitespace(c);
 
     parse_number(c, &p->rhs);
@@ -711,7 +721,7 @@ int parse_fourth_line_predicates(struct_parse_context *c, struct_fourth_line *fl
     size_t head = c->top;
 
     // first predicate
-    p = malloc(sizeof(struct_predicate));
+    p = (struct_predicate *) malloc(sizeof(struct_predicate));
     parse_fourth_line_predicate(c, p);
 
     // push into context
@@ -724,7 +734,7 @@ int parse_fourth_line_predicates(struct_parse_context *c, struct_fourth_line *fl
         parse_whitespace(c);
 
         // following predicates
-        p = malloc(sizeof(struct_predicate));
+        p = (struct_predicate *) malloc(sizeof(struct_predicate));
         parse_fourth_line_predicate(c, p);
 
         // push into context
@@ -733,9 +743,9 @@ int parse_fourth_line_predicates(struct_parse_context *c, struct_fourth_line *fl
     }
 
     size_t len = c->top - head;
-    const struct_predicate *predicates = context_pop(c, len);
+    const struct_predicate *predicates = (struct_predicate *) context_pop(c, len);
 
-    fl->predicates = malloc(len);
+    fl->predicates = (struct_predicate *) malloc(len);
     memcpy(fl->predicates, predicates, len);
     fl->length = len / sizeof(struct_predicate);
 
@@ -814,7 +824,7 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
 
     size_t head = c->top;
 
-    query = malloc(sizeof(struct_query));
+    query = (struct_query *) malloc(sizeof(struct_query));
     parse_query(c, query);
 
     // push into context
@@ -825,7 +835,7 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
     while (c->input[0] == 'S') {
         parse_whitespace(c);
 
-        query = malloc(sizeof(struct_query));
+        query = (struct_query *) malloc(sizeof(struct_query));
         parse_query(c, query);
 
         // push into context
@@ -834,9 +844,9 @@ int parse_queries(struct_parse_context *c, struct_queries *queries) {
     }
 
     size_t len = c->top - head;
-    const struct_query *tmp_queries = context_pop(c, len);
+    const struct_query *tmp_queries = (struct_query *) context_pop(c, len);
 
-    queries->queries = malloc(len);
+    queries->queries = (struct_query *) malloc(len);
     memcpy(queries->queries, tmp_queries, len);
     queries->length = len / sizeof(struct_query);
 
@@ -989,7 +999,7 @@ void read_second_part_from_stdin(char **input) {
     line = NULL;
 
     size_t len = c.top;
-    const char *tmp_input = context_pop(&c, len);
+    const char *tmp_input = (char *) context_pop(&c, len);
 
     // malloc memory for *input and copy the input to it
     *input = (char *) malloc(len + 1);
@@ -1239,7 +1249,7 @@ void free_struct_file(struct_file *file) {
 }
 
 void init_struct_files(struct_files *files, int length) {
-    files->files = malloc(length * sizeof(struct_file));
+    files->files = (struct_file *) malloc(length * sizeof(struct_file));
     files->length = length;
 
     for (int i = 0; i < length; i++) {
@@ -1559,6 +1569,211 @@ void load_csv_files(struct_input_files *path_files, struct_files *loaded_files) 
 }
 
 /*
+  ______               __      __                __
+ /      \             /  |    /  |              /  |
+/$$$$$$  |  ______   _$$ |_   $$/  _____  ____  $$/  ________   ______    ______
+$$ |  $$ | /      \ / $$   |  /  |/     \/    \ /  |/        | /      \  /      \
+$$ |  $$ |/$$$$$$  |$$$$$$/   $$ |$$$$$$ $$$$  |$$ |$$$$$$$$/ /$$$$$$  |/$$$$$$  |
+$$ |  $$ |$$ |  $$ |  $$ | __ $$ |$$ | $$ | $$ |$$ |  /  $$/  $$    $$ |$$ |  $$/
+$$ \__$$ |$$ |__$$ |  $$ |/  |$$ |$$ | $$ | $$ |$$ | /$$$$/__ $$$$$$$$/ $$ |
+$$    $$/ $$    $$/   $$  $$/ $$ |$$ | $$ | $$ |$$ |/$$      |$$       |$$ |
+ $$$$$$/  $$$$$$$/     $$$$/  $$/ $$/  $$/  $$/ $$/ $$$$$$$$/  $$$$$$$/ $$/
+          $$ |
+          $$ |
+          $$/
+ */
+
+const std::string vector_to_string(const std::vector<int> &v) {
+    std::stringstream ss;
+    for (auto it = v.begin(); it != v.end(); it++) {
+        ss << *it << '-';
+    }
+
+    return ss.str();
+}
+
+/**
+ * Calculate the cost of join r + order and order + r, return the one with smaller cost
+ *
+ * @param prev_order: order of previsou join clauses
+ * @param join: index to the join clause
+ * @param plan: where we put the order after this join
+ * @return cost of this join order, INT32_MAX if impossible to join
+ */
+int cost(const std::vector<int> &prev_order,
+         const int join,
+         std::vector<int> &plan,
+         const std::vector<struct_join *> &joins) {
+
+    // todo: if first join, it's true
+
+    ///////////////////////////////
+    // check if join is possible //
+    ///////////////////////////////
+    // the join clause we want to evaluate
+    const struct_join *new_join = joins[join];
+
+    //////////////
+    // join left?
+    /////////////
+    // first join in joins should be able to join with join
+    bool can_join_left = false;
+    std::unordered_set<char> sets;
+    sets.insert(new_join->lhs.relation);
+    sets.insert(new_join->rhs.relation);
+
+    // check if the first join in the previous join order is inside the set
+    const struct_join *first = joins[prev_order[0]];
+
+    if (sets.find(first->lhs.relation) != sets.end()
+        || sets.find(first->rhs.relation) != sets.end()) {
+        can_join_left = true;
+    }
+
+    ////////////////
+    // join right?
+    ///////////////
+    // either lhs or rhs of join should be in the joining tree
+    bool can_join_right = false;
+
+    // add all joined relations to the set
+    sets.clear();
+    for (auto i:prev_order) {
+        sets.insert(joins[i]->lhs.relation);
+        sets.insert(joins[i]->rhs.relation);
+    }
+
+    // check if right join is possible
+    if (sets.find(new_join->lhs.relation) != sets.end()
+        || sets.find(new_join->rhs.relation) != sets.end()) {
+        can_join_right = true;
+    }
+
+    // this order of join is impossible
+    if (!(can_join_left || can_join_right)) {
+        return INT32_MAX;
+    }
+
+    /////////////////////////////////////////////////////////
+    // calculate new cost for join orders that are possible
+    /////////////////////////////////////////////////////////
+    int cost = INT32_MAX;
+    // can join left, calculate cost
+    if (can_join_left) {
+
+    }
+
+    // can join right, calculate cost
+    if (can_join_right) {
+
+    }
+
+    // todo: update plan
+    plan.clear();
+    if (can_join_left) {
+        plan.push_back(join);
+        plan.insert(plan.begin() + 1, prev_order.begin(), prev_order.end());
+    } else if (can_join_right) {
+        plan.insert(plan.begin(), prev_order.begin(), prev_order.end());
+        plan.push_back(join);
+    }
+
+    return cost;
+}
+
+/**
+ * Compute the best join order, given join clauses as rels
+ *
+ * @param rels: index of join clauses to join, should be sorted, ascending
+ * @param best: map from joins to the best order of joining them
+ * @param joins: join clauses
+ * @return best join order of rels
+ */
+std::vector<int> compute_best(const std::vector<int> &rels,
+                              std::unordered_map<std::string, std::vector<int>> &best,
+                              const std::vector<struct_join *> &joins) {
+    auto key = vector_to_string(rels);
+    if (best.find(key) != best.end()) {
+        return best[key];
+    }
+
+    // current join plan
+    std::vector<int> curr_plan;
+    int curr_cost = INT32_MAX;
+
+    // tmp vector
+    std::vector<int> plan;
+    for (int i = 0; i < rels.size(); i++) {
+        // make a copy so we can modify
+        std::vector<int> tmp(rels);
+        // delete tmp[i]
+        tmp.erase(tmp.begin() + i);
+
+        // recursivly get the sub join order
+        auto internal_order = compute_best(tmp, best, joins);
+
+        if (internal_order.empty()) {
+            // no join possible
+            continue;
+        }
+
+        // check [r] + order || order + [r]
+        // todo: join itself
+        auto plan_cost = cost(internal_order, rels[i], plan, joins);
+
+        if (plan_cost <= curr_cost) {
+            curr_plan = plan;
+            curr_cost = plan_cost;
+        }
+    }
+
+    // todo: what if there is no join possible
+    best[key] = curr_plan;
+
+    return curr_plan;
+}
+
+/**
+ * Re-order the joins
+ */
+// todo
+void optimize_joins(struct_files *const files, struct_query *const query) {
+    // init joins and rels
+    std::vector<int> rels;
+    std::vector<struct_join *> joins;
+    for (int i = 0; i < query->third.length; i++) {
+        rels.push_back(i);
+        joins.push_back(&query->third.joins[i]);
+    }
+
+    // init best
+    std::vector<int> order;
+    std::unordered_map<std::string, std::vector<int>> best;
+    for (int i = 0; i < joins.size(); i++) {
+        order.clear();
+        order.push_back(i);
+        auto tmp = vector_to_string(order);
+
+        best[tmp] = order;
+    }
+    
+    auto best_join_order = compute_best(rels, best, joins);
+    
+    // apply this order to query->third
+    auto third = query->third.joins;
+
+    // make a copy of joins
+    std::vector<struct_join> tmp_joins;
+    for (auto each: joins) {
+        tmp_joins.push_back(*each);
+    }
+
+    for (int i = 0; i < best_join_order.size(); i++) {
+        third[i] = tmp_joins[best_join_order[i]];
+    }
+}
+
+/*
  ________                                            __      __                            ________                      __
 /        |                                          /  |    /  |                          /        |                    /  |
 $$$$$$$$/  __    __   ______    _______  __    __  _$$ |_   $$/   ______   _______        $$$$$$$$/  _______    ______  $$/  _______    ______
@@ -1674,7 +1889,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
         // get the number to be compared
         number = columns[df->index[fast]];
 
-        switch (predicate->operator) {
+        switch (predicate->op) {
             case EQUAL:
                 if (number == predicate->rhs) {
                     shouldKeep = 1;
@@ -1806,7 +2021,7 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
         struct_number_row key;
         key.number = number_right;
 
-        struct_number_row *res = bsearch(
+        struct_number_row *res = (struct_number_row *) bsearch(
                 &key, buffer_outer_loop,
                 length_buffer_outer_loop,
                 sizeof(struct_number_row),
@@ -1859,13 +2074,13 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
         free_struct_parse_context(&c);
     } else {
         // directly use the stack's memory, without creating new space and copying
-        int *tmp_index = context_pop(&c, top);
+        int *tmp_index = (int *) context_pop(&c, top);
         // manually empty c
         c.top = 0;
         c.size = 0;
         c.stack = NULL;
 
-        intermediate->index = realloc(tmp_index, top);
+        intermediate->index = (int *) realloc(tmp_index, top);
 
         // bytes / sizeof int / number per row = num of row
         intermediate->num_row = top / strlen(intermediate->relations) / sizeof(int);
@@ -1926,7 +2141,7 @@ void sorted_nested_loop_join_both_joined_before(const struct_files *const loaded
         intermediate->num_row = 0;
     } else {
         // memcpy
-        int *tmp_index = context_pop(&c, top);
+        int *tmp_index = (int *) context_pop(&c, top);
         intermediate->index = (int *) malloc(top);
         memcpy(intermediate->index, tmp_index, top);
 
@@ -1952,13 +2167,6 @@ void execute_selects(struct_files *const loaded_file, const struct_fourth_line *
     }
 }
 
-/**
- * Re-order the joins
- */
-// todo
-void optimize_joins(struct_files *const files, struct_third_line *const tl) {
-
-}
 
 /**
  * Execute all the joins, and assign the result to *result
@@ -2065,7 +2273,7 @@ void execute(struct_files *const loaded_file, struct_query *const query) {
     struct_data_frame result;
 
     // optimize join order
-    optimize_joins(loaded_file, &query->third);
+    optimize_joins(loaded_file, query);
 
     // join
     execute_joins(loaded_file, &query->third, &result);
