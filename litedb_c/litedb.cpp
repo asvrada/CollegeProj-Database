@@ -1657,18 +1657,19 @@ int cost(const std::vector<int> &prev_order,
     /////////////////////////////////////////////////////////
     // calculate new cost for join orders that are possible
     /////////////////////////////////////////////////////////
-    int cost = INT32_MAX;
+    int cost_left = INT32_MAX;
     // can join left, calculate cost
     if (can_join_left) {
 
     }
 
+    int cost_right = INT32_MAX;
     // can join right, calculate cost
     if (can_join_right) {
 
     }
 
-    // todo: update plan
+    // update plan
     plan.clear();
     if (can_join_left) {
         plan.push_back(join);
