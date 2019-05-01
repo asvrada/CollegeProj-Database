@@ -1672,13 +1672,15 @@ int cost(const std::vector<int> &prev_order,
     plan.clear();
     if (can_join_left) {
         plan.push_back(join);
-        plan.insert(plan.begin() + 1, prev_order.begin(), prev_order.end());
+        plan.insert(plan.end(), prev_order.begin(), prev_order.end());
     } else if (can_join_right) {
         plan.insert(plan.begin(), prev_order.begin(), prev_order.end());
         plan.push_back(join);
     }
 
-    return cost;
+    // todo: return actual cost
+    return 1;
+//    return cost;
 }
 
 /**
@@ -1689,9 +1691,9 @@ int cost(const std::vector<int> &prev_order,
  * @param joins: join clauses
  * @return best join order of rels
  */
-std::vector<int> compute_best(const std::vector<int> &rels,
-                              std::unordered_map<std::string, std::vector<int>> &best,
-                              const std::vector<struct_join *> &joins) {
+std::vector<int> &compute_best(const std::vector<int> &rels,
+                               std::unordered_map<std::string, std::vector<int>> &best,
+                               const std::vector<struct_join *> &joins) {
     auto key = vector_to_string(rels);
     if (best.find(key) != best.end()) {
         return best[key];
@@ -1730,7 +1732,7 @@ std::vector<int> compute_best(const std::vector<int> &rels,
     // todo: what if there is no join possible
     best[key] = curr_plan;
 
-    return curr_plan;
+    return best[key];
 }
 
 /**
@@ -1756,9 +1758,9 @@ void optimize_joins(struct_files *const files, struct_query *const query) {
 
         best[tmp] = order;
     }
-    
+
     auto best_join_order = compute_best(rels, best, joins);
-    
+
     // apply this order to query->third
     auto third = query->third.joins;
 
