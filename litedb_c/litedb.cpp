@@ -1,9 +1,12 @@
 /*
- * Created by ZiJie Wu on 2019-03-28.
+ * Created by Zijie Wu on 2019-03-28.
  * The entire Database assignment in one GIANT source file, just to make compiling easier
  *
- * It comprises of several components: data loader, parser
+ * It comprises of several components: data loader, parser, catalog, optimizer and execution engine
+ *
+ * Its mainly in C99, but to use map, I have to introduce c++11 under optimizer section.
  */
+
 #ifndef LITE_DB_LITEDB_C
 #define LITE_DB_LITEDB_C
 
@@ -31,6 +34,7 @@ static long count_buffer_total = 0;
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <algorithm>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,7 +51,6 @@ do {\
         exit(99);\
     }\
 } while(0)
-
 
 /*
  _______
@@ -1583,196 +1586,368 @@ $$    $$/ $$    $$/   $$  $$/ $$ |$$ | $$ | $$ |$$ |/$$      |$$       |$$ |
           $$/
  */
 
-const std::string vector_to_string(const std::vector<int> &v) {
+const std::string vector_to_string(const std::vector<char> &v) {
     std::stringstream ss;
-    for (auto it = v.begin(); it != v.end(); it++) {
-        ss << *it << '-';
+    for (const auto &each: v) {
+        ss << each;
+    }
+    return ss.str();
+}
+
+// vector(A, B, D, C) => "ABCD"
+const std::string vector_to_string_sorted(const std::vector<char> &origin) {
+    auto v = origin;
+    std::sort(v.begin(), v.end());
+
+    std::stringstream ss;
+    for (const auto &each: v) {
+        ss << each;
     }
 
     return ss.str();
 }
 
-/**
- * Calculate the cost of join r + order and order + r, return the one with smaller cost
- *
- * @param prev_order: order of previsou join clauses
- * @param join: index to the join clause
- * @param plan: where we put the order after this join
- * @return cost of this join order, INT32_MAX if impossible to join
- */
-int cost(const std::vector<int> &prev_order,
-         const int join,
-         std::vector<int> &plan,
-         const std::vector<struct_join *> &joins) {
+#define INF_COST ((float)INT32_MAX + 1)
+typedef std::vector<char> Order;
 
-    // todo: if first join, it's true
+class BestPlan {
+public:
+    Order order;
+    float cost;
+
+    BestPlan() {
+        cost = INF_COST;
+    }
+};
+
+typedef std::unordered_map<std::string, BestPlan> Best;
+
+/**
+ * Compute the cost joining two basic relation
+ *
+ * 1. find the join clause
+ * 2. compute the cost
+ */
+float cost_two_relations(const char r,
+                         const char s,
+                         Best &best,
+                         struct_files *const files,
+                         struct_query *const query) {
+    // 1. find the join clause
+    // i is the index of that join clause we want
+    int i = 0;
+    for (; i < query->third.length; i++) {
+        auto &clause = query->third.joins[i];
+
+        if ((clause.lhs.relation == r && clause.rhs.relation == s)
+            || (clause.lhs.relation == s && clause.rhs.relation == r)) {
+            break;
+        }
+    }
+
+    if (i == query->third.length) {
+        // not possible to join
+        return INF_COST;
+    }
+
+    // 2. compute the cost
+    auto &clause = query->third.joins[i];
+    auto &file_A = files->files[clause.lhs.relation - 'A'];
+    auto &file_B = files->files[clause.rhs.relation - 'A'];
+
+    int card_A = file_A.df == NULL ? file_A.num_row : file_A.df->num_row;
+    int card_B = file_B.df == NULL ? file_B.num_row : file_B.df->num_row;
+    int uni_A = file_A.meta[clause.lhs.column].unique;
+    int uni_B = file_B.meta[clause.rhs.column].unique;
+
+    return (float) card_A * card_B * std::min(uni_A, uni_B) / uni_A / uni_B;
+}
+
+/**
+ * Compute the cost of [r] + prev and prev + [r], pick the least cost, and assign it to plan
+ *
+ * @param prev_order: a join order we already have
+ * @param r: new relation to add to prev join order
+ * @param new_order: the result (new join order) we want to generate
+ * @return
+ */
+float cost_general(const Order &prev_order,
+                   const char r,
+                   Order &new_order,
+                   Best &best,
+                   struct_files *const files,
+                   struct_query *const query) {
+    new_order.clear();
+
+    // join two naive relations
+    if (prev_order.size() == 1) {
+        auto cost = cost_two_relations(prev_order[0], r, best, files, query);
+
+        // if cost is not inf
+        if (cost < (INF_COST + 1)) {
+            new_order.push_back(prev_order[0]);
+            new_order.push_back(r);
+        }
+
+        return cost;
+    }
 
     ///////////////////////////////
     // check if join is possible //
     ///////////////////////////////
-    // the join clause we want to evaluate
-    const struct_join *new_join = joins[join];
+    std::unordered_set<char> set_prev(prev_order.begin(), prev_order.end());
+    int i;
 
-    //////////////
-    // join left?
-    /////////////
-    // first join in joins should be able to join with join
-    bool can_join_left = false;
-    std::unordered_set<char> sets;
-    sets.insert(new_join->lhs.relation);
-    sets.insert(new_join->rhs.relation);
+    // there should be at least one join clause where contains r and the other side is in prev
+    const auto &third = query->third;
+    for (i = 0; i < third.length; i++) {
+        const auto &clause = third.joins[i];
 
-    // check if the first join in the previous join order is inside the set
-    const struct_join *first = joins[prev_order[0]];
-
-    if (sets.find(first->lhs.relation) != sets.end()
-        || sets.find(first->rhs.relation) != sets.end()) {
-        can_join_left = true;
-    }
-
-    ////////////////
-    // join right?
-    ///////////////
-    // either lhs or rhs of join should be in the joining tree
-    bool can_join_right = false;
-
-    // add all joined relations to the set
-    sets.clear();
-    for (auto i:prev_order) {
-        sets.insert(joins[i]->lhs.relation);
-        sets.insert(joins[i]->rhs.relation);
-    }
-
-    // check if right join is possible
-    if (sets.find(new_join->lhs.relation) != sets.end()
-        || sets.find(new_join->rhs.relation) != sets.end()) {
-        can_join_right = true;
-    }
-
-    // this order of join is impossible
-    if (!(can_join_left || can_join_right)) {
-        return INT32_MAX;
-    }
-
-    /////////////////////////////////////////////////////////
-    // calculate new cost for join orders that are possible
-    /////////////////////////////////////////////////////////
-    int cost_left = INT32_MAX;
-    // can join left, calculate cost
-    if (can_join_left) {
-
-    }
-
-    int cost_right = INT32_MAX;
-    // can join right, calculate cost
-    if (can_join_right) {
-
-    }
-
-    // update plan
-    plan.clear();
-    if (can_join_left) {
-        plan.push_back(join);
-        plan.insert(plan.end(), prev_order.begin(), prev_order.end());
-    } else if (can_join_right) {
-        plan.insert(plan.begin(), prev_order.begin(), prev_order.end());
-        plan.push_back(join);
-    }
-
-    // todo: return actual cost
-    return 1;
-//    return cost;
-}
-
-/**
- * Compute the best join order, given join clauses as rels
- *
- * @param rels: index of join clauses to join, should be sorted, ascending
- * @param best: map from joins to the best order of joining them
- * @param joins: join clauses
- * @return best join order of rels
- */
-std::vector<int> &compute_best(const std::vector<int> &rels,
-                               std::unordered_map<std::string, std::vector<int>> &best,
-                               const std::vector<struct_join *> &joins) {
-    auto key = vector_to_string(rels);
-    if (best.find(key) != best.end()) {
-        return best[key];
-    }
-
-    // current join plan
-    std::vector<int> curr_plan;
-    int curr_cost = INT32_MAX;
-
-    // tmp vector
-    std::vector<int> plan;
-    for (int i = 0; i < rels.size(); i++) {
-        // make a copy so we can modify
-        std::vector<int> tmp(rels);
-        // delete tmp[i]
-        tmp.erase(tmp.begin() + i);
-
-        // recursivly get the sub join order
-        auto internal_order = compute_best(tmp, best, joins);
-
-        if (internal_order.empty()) {
-            // no join possible
+        // this clause has nothing to do with r
+        if (!(clause.lhs.relation == r || clause.rhs.relation == r)) {
             continue;
         }
 
-        // check [r] + order || order + [r]
-        // todo: join itself
-        auto plan_cost = cost(internal_order, rels[i], plan, joins);
+        // the other relation to search
+        char other_re = clause.lhs.relation == r ? clause.rhs.relation : clause.lhs.relation;
 
-        if (plan_cost <= curr_cost) {
-            curr_plan = plan;
-            curr_cost = plan_cost;
+        if (set_prev.find(other_re) != set_prev.end()) {
+            // we found the clause
+            break;
         }
     }
 
-    // todo: what if there is no join possible
-    best[key] = curr_plan;
+    // we didnt find the clause, so it's impossible to join
+    if (i == third.length) {
+        return INF_COST;
+    }
 
-    return best[key];
+    // now calculate the cost of [r] + prev and prev + [r]
+    const auto &clause = third.joins[i];
+
+    // we find out which two column to join
+    const auto &rc_r = clause.lhs.relation == r ? clause.lhs : clause.rhs;
+    const auto &rc_prev = clause.lhs.relation != r ? clause.lhs : clause.rhs;
+    const auto &file_r = files->files[rc_r.relation - 'A'];
+    const auto &file_prev = files->files[rc_prev.relation - 'A'];
+
+    // find out cost for prev best join
+    auto key_prev = vector_to_string_sorted(prev_order);
+    auto plan_prev = best[key_prev];
+
+    // previous plan should be valid
+    ASSERT(plan_prev.cost < (INF_COST - 1));
+
+    // cost of r
+    auto cost_r = file_r.df != NULL ? file_r.df->num_row : file_r.num_row;
+
+    // todo:
+    auto cost_new = plan_prev.cost + cost_r;
+
+    // add plan to new_order
+    new_order.insert(new_order.end(), prev_order.begin(), prev_order.end());
+    new_order.push_back(r);
+
+    return cost_new;
 }
 
 /**
- * Re-order the joins
+ * Compute the best join order of relations rels
+ *
+ * @param rels: sorted relations among which we want to optimize their joins
+ * @param best: a mapping stores current best join orders for each key
+ * @param joins
+ * @return
+ */
+BestPlan &compute_best(const std::vector<char> &rels,
+                       Best &best,
+                       struct_files *const files,
+                       struct_query *const query) {
+    auto str_rels = vector_to_string_sorted(rels);
+
+    // if best[rels] already computed
+    if (best.find(str_rels) != best.end()) {
+        return best[str_rels];
+    }
+
+    // only 1 relation
+    if (rels.size() == 1) {
+        char rel = rels[0];
+
+        best[str_rels] = BestPlan();
+        auto &plan = best[str_rels];
+
+        plan.order.push_back(rel);
+
+        auto &file = files->files[rel - 'A'];
+        plan.cost = file.df != NULL ? file.df->num_row : file.num_row;
+
+        return best[str_rels];
+    }
+
+    // for each sub-set of rels, compute its cost
+    std::vector<char> new_order;
+    // check orders without r
+    for (int i = 0; i < rels.size(); i++) {
+        auto rels_minus_r = rels;
+        rels_minus_r.erase(rels_minus_r.begin() + i);
+
+        auto internal_order = compute_best(rels_minus_r, best, files, query);
+
+        if (internal_order.order.empty() || internal_order.cost >= (INF_COST - 1)) {
+            continue;
+        }
+
+        // get the cost join r + internal_order and internal_order + r
+        auto cost = cost_general(internal_order.order, rels[i], new_order, best, files, query);
+
+        if (cost < best[str_rels].cost) {
+            best[str_rels].cost = cost;
+            best[str_rels].order = new_order;
+        }
+    }
+
+    return best[str_rels];
+}
+
+bool join_clause_contains(struct_join *join, char r, char s) {
+    return ((join->lhs.relation == r && join->rhs.relation == s)
+            || (join->lhs.relation == s && join->rhs.relation == r));
+}
+
+/**
+ * Reorder struct_join to optimize the joining process
+ *
+ * Selinger’s algorithm
+ *
+ * @param files
+ * @param query
  */
 // todo
 void optimize_joins(struct_files *const files, struct_query *const query) {
-    // init joins and rels
-    std::vector<int> rels;
-    std::vector<struct_join *> joins;
-    for (int i = 0; i < query->third.length; i++) {
-        rels.push_back(i);
-        joins.push_back(&query->third.joins[i]);
+    // init rels
+    std::vector<char> rels(query->second.length);
+    for (int i = 0; i < query->second.length; i++) {
+        rels[i] = query->second.relations[i];
     }
 
-    // init best
-    std::vector<int> order;
-    std::unordered_map<std::string, std::vector<int>> best;
-    for (int i = 0; i < joins.size(); i++) {
-        order.clear();
-        order.push_back(i);
-        auto tmp = vector_to_string(order);
+    ////////////////////////////////////////////////////////
+    // init best and cost for each pair A, B in relations //
+    ////////////////////////////////////////////////////////
+    /**
+     * Key for best is sorted
+     */
+    Best best;
 
-        best[tmp] = order;
-    }
+    // compute best join order
+    auto best_join_order = compute_best(rels, best, files, query);
 
-    auto best_join_order = compute_best(rels, best, joins);
+//    std::cout << vector_to_string(best_join_order.order) << std::endl;
 
+//    for (const auto &pair: best) {
+//        if (pair.second.order.empty() || pair.second.order.size() == 1) {
+//            continue;
+//        }
+//
+//        std::cout << pair.first
+//                  << " >>> "
+//                  << vector_to_string(pair.second.order)
+//                  << " @ "
+//                  << pair.second.cost
+//                  << std::endl;
+//    }
+
+    // calculate new join order
     // apply this order to query->third
-    auto third = query->third.joins;
+    const auto &order = best_join_order.order;
+    // this is what we actually want to modify
+    const auto &joins = query->third;
 
-    // make a copy of joins
-    std::vector<struct_join> tmp_joins;
-    for (auto each: joins) {
-        tmp_joins.push_back(*each);
+    // new order of above joins
+    std::vector<int> new_order;
+
+    // set of index of above joins left
+    std::unordered_set<int> joins_index_left;
+
+    // set of already joined re
+    std::unordered_set<char> joined_re;
+
+    // init all index of joins
+    for (int i = 0; i < joins.length; i++) {
+        joins_index_left.insert(i);
     }
 
-    for (int i = 0; i < best_join_order.size(); i++) {
-        third[i] = tmp_joins[best_join_order[i]];
+    // Each time we grow, try to find clause than lhs is inside joined, and rhs is new re
+
+    // first, find the join with [0] and [1]
+    char r = order[0];
+    char s = order[1];
+
+    // find the join clause that joins r s
+    for (auto it = joins_index_left.begin(); it != joins_index_left.end(); it++) {
+        if (join_clause_contains(&joins.joins[*it], r, s)) {
+            // found the clause
+            int index = *it;
+            // remove it from set
+            joins_index_left.erase(it);
+            // add it to new_order
+            new_order.push_back(index);
+            // add r s to joined re
+            joined_re.insert(r);
+            joined_re.insert(s);
+
+            break;
+        }
+    }
+
+    for (int i = 2; i < order.size(); i++) {
+        char re = order[i];
+        // find all join clause that contains order[i] and any element in joined_re
+        std::unordered_set<int> new_joins_index_left(joins_index_left);
+
+        for (auto &each: joins_index_left) {
+            const auto &join_clause = joins.joins[each];
+
+            // check if this join contains re
+            if (!(join_clause.lhs.relation == re || join_clause.rhs.relation == re)) {
+                continue;
+            }
+
+            char other_re = join_clause.lhs.relation == re ? join_clause.rhs.relation : join_clause.lhs.relation;
+
+            // now check if other hand side in joined_re
+            if (joined_re.find(other_re) != joined_re.end()) {
+                // we found it
+                // remove it from new_joins_index_left
+                new_joins_index_left.erase(each);
+
+                // add it to joined_re
+                joined_re.insert(re);
+                // add it to new_order
+                new_order.push_back(each);
+            }
+        }
+
+        // swap set
+        joins_index_left = new_joins_index_left;
+    }
+
+    ASSERT(new_order.size() == joins.length);
+
+//    for (auto each: new_order) {
+//        std::cout << each << " ";
+//    }
+//
+//    std::cout << std::endl;
+
+    // apply new order to joins.joins
+    std::vector<struct_join> tmp_joins;
+    for (int i = 0; i < joins.length; i++) {
+        tmp_joins.push_back(joins.joins[i]);
+    }
+
+    for (int i = 0; i < new_order.size(); i++) {
+        joins.joins[i] = tmp_joins[new_order[i]];
     }
 }
 
@@ -1944,7 +2119,6 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
  * @param relation
  * @param join
  */
-//todo: buffer outer loop
 void sorted_nested_loop_join(const struct_files *const loaded_files,
                              struct_data_frame *const intermediate,
                              struct_file *const relation,
