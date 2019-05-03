@@ -1622,6 +1622,22 @@ public:
 
 typedef std::unordered_map<std::string, BestPlan> Best;
 
+float cost_join(int i,
+                struct_files *const files,
+                struct_query *const query) {
+
+    auto &clause = query->third.joins[i];
+    auto &file_A = files->files[clause.lhs.relation - 'A'];
+    auto &file_B = files->files[clause.rhs.relation - 'A'];
+
+    int card_A = file_A.df == NULL ? file_A.num_row : file_A.df->num_row;
+    int card_B = file_B.df == NULL ? file_B.num_row : file_B.df->num_row;
+    int uni_A = file_A.meta[clause.lhs.column].unique;
+    int uni_B = file_B.meta[clause.rhs.column].unique;
+
+    return (float) card_A * card_B * std::min(uni_A, uni_B) / uni_A / uni_B;
+}
+
 /**
  * Compute the cost joining two basic relation
  *
@@ -1651,16 +1667,7 @@ float cost_two_relations(const char r,
     }
 
     // 2. compute the cost
-    auto &clause = query->third.joins[i];
-    auto &file_A = files->files[clause.lhs.relation - 'A'];
-    auto &file_B = files->files[clause.rhs.relation - 'A'];
-
-    int card_A = file_A.df == NULL ? file_A.num_row : file_A.df->num_row;
-    int card_B = file_B.df == NULL ? file_B.num_row : file_B.df->num_row;
-    int uni_A = file_A.meta[clause.lhs.column].unique;
-    int uni_B = file_B.meta[clause.rhs.column].unique;
-
-    return (float) card_A * card_B * std::min(uni_A, uni_B) / uni_A / uni_B;
+    return cost_join(i, files, query);
 }
 
 /**
@@ -1742,7 +1749,7 @@ float cost_general(const Order &prev_order,
     auto cost_r = file_r.df != NULL ? file_r.df->num_row : file_r.num_row;
 
     // todo:
-    auto cost_new = plan_prev.cost + cost_r;
+    auto cost_new = plan_prev.cost + cost_r; // + cost_join(i, files, query);
 
     // add plan to new_order
     new_order.insert(new_order.end(), prev_order.begin(), prev_order.end());
