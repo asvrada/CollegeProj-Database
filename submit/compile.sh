@@ -6,4 +6,4 @@
 # gcc -std=c99 main.c
 
 echo "Compiling litedb using g++ c++11"
-g++ -std=c++11 main.cpp
+g++ -O3 -std=c++11 main.cpp
