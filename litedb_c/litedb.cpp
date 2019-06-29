@@ -1977,7 +1977,7 @@ $$$$$$$$/ $$/   $$/  $$$$$$$/  $$$$$$$/  $$$$$$/     $$$$/  $$/  $$$$$$/  $$/   
  * This struct is used to store number and the index of row they are in
  */
 typedef struct {
-    // the number at column
+    // the number at column[df.index[row]]
     int number;
     // the index or row in dataframe.index
     int row;
@@ -2126,6 +2126,7 @@ void filter_data_given_predicate(struct_file *file, const struct_predicate *cons
  * @param relation
  * @param join
  */
+// todo: exchange left right table when size_left > size_right
 void sorted_nested_loop_join(const struct_files *const loaded_files,
                              struct_data_frame *const intermediate,
                              struct_file *const relation,
@@ -2178,65 +2179,140 @@ void sorted_nested_loop_join(const struct_files *const loaded_files,
     // Buffer for outer loop //
     ///////////////////////////
     // todo: mem full: since a entire column can always fit in memeory, we read them in and sort
-    // buffer numbers in a column as a pair (number, row), sort buffer by number
-    int length_buffer_outer_loop = intermediate->num_row;
-    struct_number_row *buffer_outer_loop = (struct_number_row *) malloc(
-            length_buffer_outer_loop * sizeof(struct_number_row));
-
-    // fill buffer with (number, index in df.index)
-    for (int i = 0; i < length_buffer_outer_loop; i++) {
-        buffer_outer_loop[i].row = i;
-        buffer_outer_loop[i].number = column_left[
-                intermediate->index[i * num_relations_before + offset_column_left]
-        ];
+    int exchanged = 0;
+    // left size is bigger than right size, we exchange them
+    if (intermediate->num_row > (is_right_df_null ? relation->num_row : relation->df->num_row)) {
+        exchanged = 1;
     }
 
-    // qsort
-    qsort(buffer_outer_loop, length_buffer_outer_loop, sizeof(struct_number_row), cmp_struct_number_row_qsort);
+    struct_number_row *buffer_outer_loop = NULL;
 
-    // inner loop
-    // binary search the each number from the right relation in the left relation
-    for (int row_relation = 0;
-         row_relation < (is_right_df_null ? relation->num_row : relation->df->num_row);
-         row_relation++) {
-        const int number_right = is_right_df_null ? column_right[row_relation]
-                                                  : column_right[relation->df->index[row_relation]];
+    if (!exchanged) {
+        // no exchange
+        // buffer numbers in a column as a pair (number, row), sort buffer by number
+        int length_buffer_outer_loop = intermediate->num_row;
+        buffer_outer_loop = (struct_number_row *) malloc(
+                length_buffer_outer_loop * sizeof(struct_number_row));
 
-        struct_number_row key;
-        key.number = number_right;
-
-        struct_number_row *res = (struct_number_row *) bsearch(
-                &key, buffer_outer_loop,
-                length_buffer_outer_loop,
-                sizeof(struct_number_row),
-                cmp_struct_number_row_bsearch);
-
-        if (res == NULL) {
-            continue;
+        // fill buffer with (number, index in df.index)
+        for (int i = 0; i < length_buffer_outer_loop; i++) {
+            buffer_outer_loop[i].row = i;
+            buffer_outer_loop[i].number = column_left[
+                    intermediate->index[i * num_relations_before + offset_column_left]
+            ];
         }
 
-        int i = res - buffer_outer_loop;
+        // qsort
+        qsort(buffer_outer_loop, length_buffer_outer_loop, sizeof(struct_number_row), cmp_struct_number_row_qsort);
 
-        // todo: make this efficient
-        // move i to the first duplicate element
-        while (i > 0 && buffer_outer_loop[i].number == buffer_outer_loop[i - 1].number) {
-            i--;
+        // inner loop
+        // binary search the each number from the right relation in the left relation
+        for (int row_relation = 0;
+             row_relation < (is_right_df_null ? relation->num_row : relation->df->num_row);
+             row_relation++) {
+            const int number_right = is_right_df_null ? column_right[row_relation]
+                                                      : column_right[relation->df->index[row_relation]];
+
+            struct_number_row key;
+            key.number = number_right;
+
+            struct_number_row *res = (struct_number_row *) bsearch(
+                    &key, buffer_outer_loop,
+                    length_buffer_outer_loop,
+                    sizeof(struct_number_row),
+                    cmp_struct_number_row_bsearch);
+
+            if (res == NULL) {
+                continue;
+            }
+
+            int i = res - buffer_outer_loop;
+
+            // move i to the first duplicate element
+            while (i > 0 && buffer_outer_loop[i].number == buffer_outer_loop[i - 1].number) {
+                i--;
+            }
+
+            // loop through buffer
+            // i = index of elements that number == number_right
+            for (; (i < length_buffer_outer_loop && buffer_outer_loop[i].number == number_right);
+                   i++) {
+                // push this row (based on original file) into stack
+                // copy index[row_inter] from inter, and concat it with index[row_relation]
+                size_t size_to_copy = num_relations_before * sizeof(int);
+
+                memcpy(context_push(&c, size_to_copy),
+                       &(intermediate->index[buffer_outer_loop[i].row * num_relations_before]),
+                       size_to_copy);
+
+                *(int *) context_push(&c, sizeof(int)) = is_right_df_null ? row_relation
+                                                                          : relation->df->index[row_relation];
+            }
+        }
+    } else {
+        // exchanged
+        // buffer numbers in a column as a pair (number, row), sort buffer by number
+        // size of right column
+        int length_buffer_outer_loop = is_right_df_null ? relation->num_row : relation->df->num_row;
+        struct_number_row *buffer_outer_loop = (struct_number_row *) malloc(
+                length_buffer_outer_loop * sizeof(struct_number_row));
+
+        // fill buffer with (number, index in df.index)
+        for (int i = 0; i < length_buffer_outer_loop; i++) {
+            buffer_outer_loop[i].row = i;
+            buffer_outer_loop[i].number = is_right_df_null ? column_right[i]
+                                                           : column_right[relation->df->index[i]];
         }
 
-        // loop through buffer
-        // i = index of elements that number == number_right
-        for (; (i < length_buffer_outer_loop && buffer_outer_loop[i].number == number_right);
-               i++) {
-            // push this row (based on original file) into stack
-            // copy index[row_inter] from inter, and concat it with index[row_relation]
-            size_t size_to_copy = num_relations_before * sizeof(int);
+        // qsort
+        qsort(buffer_outer_loop, length_buffer_outer_loop, sizeof(struct_number_row), cmp_struct_number_row_qsort);
 
-            memcpy(context_push(&c, size_to_copy),
-                   &(intermediate->index[buffer_outer_loop[i].row * num_relations_before]),
-                   size_to_copy);
+        // inner loop
+        // binary search the each number from the right relation in the left relation
+        for (int row_relation = 0;
+             row_relation < intermediate->num_row;
+             row_relation++) {
+            const int number_right = column_left[
+                    intermediate->index[row_relation * num_relations_before + offset_column_left]
+            ];
 
-            *(int *) context_push(&c, sizeof(int)) = is_right_df_null ? row_relation
-                                                                      : relation->df->index[row_relation];
+            struct_number_row key;
+            key.number = number_right;
+
+            struct_number_row *res = (struct_number_row *) bsearch(
+                    &key, buffer_outer_loop,
+                    length_buffer_outer_loop,
+                    sizeof(struct_number_row),
+                    cmp_struct_number_row_bsearch);
+
+            if (res == NULL) {
+                continue;
+            }
+
+            int i = res - buffer_outer_loop;
+
+            // todo: make this efficient
+            // move i to the first duplicate element
+            while (i > 0 && buffer_outer_loop[i].number == buffer_outer_loop[i - 1].number) {
+                i--;
+            }
+
+            // loop through buffer
+            // i = index of elements that number == number_right
+            for (; (i < length_buffer_outer_loop && buffer_outer_loop[i].number == number_right);
+                   i++) {
+                // push this row (based on original file) into stack
+                // copy index[row_inter] from inter, and concat it with index[row_relation]
+                size_t size_to_copy = num_relations_before * sizeof(int);
+
+                memcpy(context_push(&c, size_to_copy),
+                       &(intermediate->index[row_relation *
+                                             num_relations_before]),
+                       size_to_copy);
+
+                // index for df.index
+                *(int *) context_push(&c, sizeof(int)) = buffer_outer_loop[i].row;
+            }
         }
     }
 
